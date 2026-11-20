@@ -1,0 +1,72 @@
+<!doctype html>
+<!-- "How it works" diagram for the README. Render:
+     node scripts/render.mjs still --html docs/src/architecture.html --out docs/img/how-it-works.png --width 1400 --height 980 --scale 2 -->
+<html><head><meta charset="utf-8"><title>how gtavi-opusclip works</title>
+<style>
+  html,body{margin:0;width:1400px;height:980px;background:#0e0b1a;overflow:hidden;font-family:Inter,"Avenir Next","Helvetica Neue",Arial,sans-serif}
+  h1{position:absolute;left:45px;top:22px;margin:0;color:#fff;font-size:34px;font-weight:900;letter-spacing:-.5px}
+  h1 span{color:#ff2e88}
+  .sub{position:absolute;left:47px;top:68px;color:#a99cc9;font-size:17px}
+  .lane{position:absolute;left:28px;width:1344px;height:236px;border-radius:22px;background:rgba(255,255,255,.025)}
+  .lane b{position:absolute;right:22px;top:12px;font-size:13px;letter-spacing:2.5px;font-weight:800}
+  .box{position:absolute;width:290px;height:178px;border-radius:16px;background:#191330;border:2px solid;box-sizing:border-box;padding:16px 18px}
+  .box .t{font-family:"SF Mono",Menlo,monospace;font-weight:800;font-size:19px;color:#fff;margin-bottom:8px}
+  .box .d{color:#d4cbea;font-size:15.5px;line-height:1.38}
+  .box .d em{font-style:normal;color:#fff;font-weight:700}
+  .cy{border-color:#22d3ee}.pk{border-color:#ff2e88}.yl{border-color:#ffd23d}
+  .note{position:absolute;left:45px;bottom:22px;color:#a99cc9;font-size:16px}
+  .note b{color:#ffd23d}
+  svg{position:absolute;left:0;top:0}
+</style></head>
+<body>
+<h1>How <span>gtavi-opusclip</span> works</h1>
+<div class="sub">A 24-hour stream goes in. Checked, credited 9:16 clips come out. You approve every spend and every post.</div>
+
+<div class="lane" style="top:112px"><b style="color:#22d3ee">ON YOUR MACHINE · $0 COMPUTE</b></div>
+<div class="lane" style="top:382px"><b style="color:#ff2e88;right:auto;left:22px">OPUSCLIP · MCP (OAUTH) OR REST API</b></div>
+<div class="lane" style="top:652px"><b style="color:#ffd23d">PUBLISH WITH CARE</b></div>
+
+<!-- row 1: left to right -->
+<div class="box cy" style="left:45px;top:140px"><div class="t">find-streams</div><div class="d">Live and recent GTA 6 streams and VODs on <em>YouTube, Twitch, Kick</em>. Read-only.</div></div>
+<div class="box cy" style="left:385px;top:140px"><div class="t">vodwatch</div><div class="d">Audio only (<em>ytfrag.py</em>) → <em>whisper.cpp</em> → loudness + reaction words → every 30 s window ranked.</div></div>
+<div class="box cy" style="left:725px;top:140px"><div class="t">pick-moments</div><div class="d"><em>Frame sheets</em> of the top picks + a hook / payoff / reaction rubric and <em>brand-safety flags</em>.</div></div>
+<div class="box cy" style="left:1065px;top:140px"><div class="t">plan_jobs</div><div class="d">Pads and merges windows, <em>estimates credits</em>, routes each job by source length.</div></div>
+
+<!-- row 2: right to left -->
+<div class="box pk" style="left:1065px;top:410px"><div class="t">route</div><div class="d"><em>≤ 10 h:</em> URL + time range (only the range is billed).<br><em>&gt; 10 h or Kick:</em> cut-windows → 4-step upload.</div></div>
+<div class="box pk" style="left:725px;top:410px"><div class="t">ClipAnything</div><div class="d">Genre <em>Gaming</em>, <em>Gameplay layout</em> (facecam 30% / gameplay 70%), animated captions, a prompt per moment.</div></div>
+<div class="box pk" style="left:385px;top:410px"><div class="t">clips + check</div><div class="d">Ranked clips with titles and <em>Virality Score</em>. Download, frame-check, bleep profanity.</div></div>
+<div class="box pk" style="left:45px;top:410px"><div class="t">hooks + copy</div><div class="d">3 hooks per clip, per-platform copy, <em>credit line</em> on every post, <em>#ad</em> when paid.</div></div>
+
+<!-- row 3: left to right -->
+<div class="box yl" style="left:45px;top:680px"><div class="t">clip-rules</div><div class="d">The gate: <em>credit, transform</em>, no leaks or spoilers, brand safe, campaign brief followed.</div></div>
+<div class="box yl" style="left:385px;top:680px"><div class="t">schedule-post</div><div class="d">OpusClip scheduler (each post confirmed) or a <em>calendar.csv</em> to post by hand.</div></div>
+<div class="box yl" style="left:725px;top:680px"><div class="t">scoreboard</div><div class="d">Views, approvals and payouts per post → <em>rules.md</em>: what to clip next.</div></div>
+<div class="box yl" style="left:1065px;top:680px"><div class="t">campaigns</div><div class="d">Read-only research of campaigns that pay per 1,000 views: <em>rates, minimums, caps</em>, rules.</div></div>
+
+<svg width="1400" height="980" viewBox="0 0 1400 980">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#fff"/></marker>
+    <marker id="ad" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#ffd23d"/></marker>
+  </defs>
+  <g stroke="#fff" stroke-width="3" fill="none" marker-end="url(#a)">
+    <line x1="337" y1="229" x2="381" y2="229"/>
+    <line x1="677" y1="229" x2="721" y2="229"/>
+    <line x1="1017" y1="229" x2="1061" y2="229"/>
+    <line x1="1210" y1="320" x2="1210" y2="406"/>
+    <line x1="1063" y1="499" x2="1019" y2="499"/>
+    <line x1="723" y1="499" x2="679" y2="499"/>
+    <line x1="383" y1="499" x2="339" y2="499"/>
+    <line x1="190" y1="590" x2="190" y2="676"/>
+    <line x1="337" y1="769" x2="381" y2="769"/>
+    <line x1="677" y1="769" x2="721" y2="769"/>
+  </g>
+  <!-- learning loop: scoreboard back up to pick-moments -->
+  <path d="M 870 680 L 870 640 L 1388 640 L 1388 100 L 905 100 L 905 134" stroke="#ffd23d" stroke-width="3" stroke-dasharray="9 7" fill="none" marker-end="url(#ad)"/>
+  <text x="1075" y="93" fill="#ffd23d" font-size="15" font-weight="700" font-family="Inter,Arial">learning loop: rules.md → next picks</text>
+  <!-- campaigns feeds the rules -->
+  <line x1="1063" y1="769" x2="1019" y2="769" stroke="#ffd23d" stroke-width="3" stroke-dasharray="9 7" marker-end="url(#ad)"/>
+</svg>
+<div class="note"><b>Guarded:</b> a hook asks before anything spends OpusClip credits or publishes · your API key stays in your shell · the MCP signs in with OAuth in your browser</div>
+<script>window.__ready = true;</script>
+</body></html>

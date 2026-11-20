@@ -1,0 +1,108 @@
+<!doctype html>
+<!-- README hero for gtavi-opusclip. Original art: pixel clapperboard mascot ("Slate") on a neon sunset.
+     No Rockstar logos, key art or game wordmarks. Render (transparent PNG, 2x):
+     node scripts/render.mjs still --html docs/src/hero.html --out docs/img/hero.png --width 900 --height 900 --scale 2 --transparent -->
+<html><head><meta charset="utf-8"><title>gtavi-opusclip hero</title>
+<style>
+  html, body { margin: 0; width: 900px; height: 900px; background: transparent; overflow: hidden; }
+  svg { display: block; }
+  .word { font-family: Inter, "Avenir Next", "Helvetica Neue", Arial, sans-serif; font-weight: 900; font-style: italic; }
+</style></head>
+<body>
+<svg id="art" xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900">
+  <defs>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe66b"/>
+      <stop offset="0.35" stop-color="#ff9a3d"/>
+      <stop offset="0.68" stop-color="#ff2e88"/>
+      <stop offset="1" stop-color="#9b2cf0"/>
+    </linearGradient>
+    <linearGradient id="grid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff2e88" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#ff2e88" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7b2ff7"/>
+      <stop offset="1" stop-color="#ff2e88"/>
+    </linearGradient>
+    <mask id="stripes">
+      <rect x="0" y="0" width="900" height="860" fill="#fff"/>
+      <g id="stripeRects" fill="#000"></g>
+    </mask>
+    <clipPath id="aboveHorizon"><rect x="0" y="0" width="900" height="690"/></clipPath>
+  </defs>
+
+  <g id="scene" transform="translate(0 44)">
+  <!-- floor grid -->
+  <g id="floor" stroke="url(#grid)" stroke-width="3" fill="none"></g>
+  <!-- the sun -->
+  <g clip-path="url(#aboveHorizon)">
+    <circle cx="450" cy="500" r="250" fill="#1c1030"/>
+    <circle cx="450" cy="500" r="238" fill="url(#sun)" mask="url(#stripes)"/>
+  </g>
+  <line x1="120" y1="690" x2="780" y2="690" stroke="#ff2e88" stroke-width="6" stroke-linecap="round"/>
+  <!-- palms -->
+  <g id="palms" fill="#3b1463" stroke="#14081f" stroke-width="3" stroke-linejoin="round"></g>
+  <!-- wordmark -->
+  <g id="wordmark" transform="translate(450 0) skewX(-8)"></g>
+  <!-- ribbon -->
+  <g transform="translate(450 760) rotate(-3)">
+    <rect x="-215" y="-34" width="430" height="64" rx="14" fill="#1c1030"/>
+    <rect x="-207" y="-28" width="414" height="52" rx="10" fill="url(#ribbon)"/>
+    <text x="0" y="10" text-anchor="middle" class="word" font-size="30" fill="#fff" letter-spacing="3">STREAMS IN · CLIPS OUT</text>
+  </g>
+  </g>
+  <!-- mascot, bills, sparkles -->
+  <g id="fx"></g>
+</svg>
+<script src="mascot.js"></script>
+<script>
+  const ns = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, parent) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || document.getElementById('art')).appendChild(e); return e; };
+
+  // sun stripes: transparent bands, thicker toward the bottom
+  const sr = document.getElementById('stripeRects');
+  let y = 545, h = 6;
+  for (let i = 0; i < 7; i++) { el('rect', { x: 0, y, width: 900, height: h }, sr); y += h + 16 - i; h += 3; }
+
+  // perspective floor grid under the horizon
+  const floor = document.getElementById('floor');
+  const vx = 450, hy = 690;
+  for (let i = -9; i <= 9; i++) el('line', { x1: vx + i * 18, y1: hy, x2: vx + i * 120, y2: 860 }, floor);
+  [700, 716, 740, 776, 830].forEach(yy => el('line', { x1: 0, y1: yy, x2: 900, y2: yy }, floor));
+
+  // palm silhouettes
+  function palm(x0, y0, x1, y1, lean, scale) {
+    const g = document.getElementById('palms');
+    const w0 = 16 * scale, w1 = 7 * scale;
+    el('path', { d: `M ${x0 - w0} ${y0} Q ${x0 + lean} ${(y0 + y1) / 2} ${x1 - w1} ${y1} L ${x1 + w1} ${y1} Q ${x0 + lean + w0 * 1.2} ${(y0 + y1) / 2} ${x0 + w0} ${y0} Z` }, g);
+    const fronds = [[-150, 30], [-115, -30], [-60, -70], [10, -85], [75, -55], [130, -10], [160, 45]];
+    fronds.forEach(([dx, dy]) => {
+      const tx = x1 + dx * scale, ty = y1 + dy * scale + 40 * scale;
+      const mx = x1 + dx * 0.55 * scale, my = y1 + dy * 0.75 * scale;
+      el('path', { d: `M ${x1} ${y1} Q ${mx} ${my - 34 * scale} ${tx} ${ty} Q ${mx} ${my + 4 * scale} ${x1} ${y1 + 8 * scale} Z` }, g);
+    });
+  }
+  palm(150, 700, 205, 380, 70, 0.95);
+  palm(752, 700, 700, 420, -60, 0.8);
+
+  // wordmark: white chunky letters, dark outline, pink extrusion
+  const wm = document.getElementById('wordmark');
+  function word(text, yy, size) {
+    for (let d = 14; d >= 1; d -= 1) el('text', { x: d * 0.9, y: yy + d, 'text-anchor': 'middle', class: 'word', 'font-size': size, fill: d > 7 ? '#7b2ff7' : '#c41f74', stroke: '#1c1030', 'stroke-width': d === 14 ? 16 : 0, 'stroke-linejoin': 'round' }, wm).textContent = text;
+    el('text', { x: 0, y: yy, 'text-anchor': 'middle', class: 'word', 'font-size': size, fill: '#ffffff', stroke: '#1c1030', 'stroke-width': 12, 'paint-order': 'stroke', 'stroke-linejoin': 'round' }, wm).textContent = text;
+  }
+  word('CLIP', 525, 168);
+  word('DESK', 665, 168);
+
+  // mascot on top of the sun, with flying cash and sparkles
+  const fx = document.getElementById('fx');
+  drawMascot(fx, { x: 318, y: 74, px: 11 });
+  drawBill(fx, 120, 110, 9, -22);
+  drawBill(fx, 700, 70, 9, 18);
+  drawBill(fx, 760, 230, 8, 34);
+  drawBill(fx, 70, 270, 8, -38);
+  [[255, 60, 1], [650, 165, 0], [180, 190, 0], [805, 135, 1], [600, 40, 0], [96, 370, 1], [820, 340, 0]].forEach(([x, yy, big]) => drawSpark(fx, x, yy, 9, big));
+  document.fonts.ready.then(() => { window.__ready = true; });
+</script>
+</body></html>

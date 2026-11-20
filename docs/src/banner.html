@@ -1,0 +1,42 @@
+<!doctype html>
+<!-- "16 Skills In One Install" banner for the README. Render (2x, transparent corners):
+     node scripts/render.mjs still --html docs/src/banner.html --out docs/img/skills-banner.png --width 640 --height 128 --scale 2 --transparent -->
+<html><head><meta charset="utf-8"><title>skills banner</title>
+<style>
+  html,body{margin:0;width:640px;height:128px;background:transparent;overflow:hidden}
+  .box{position:absolute;inset:6px;border:3.5px solid #e0247a;border-radius:20px;background:linear-gradient(90deg,#fff2f8,#fff8ef);
+       display:flex;align-items:center;font-family:Inter,"Avenir Next","Helvetica Neue",Arial,sans-serif;box-sizing:border-box}
+  .badge{width:150px;display:flex;justify-content:center;align-items:center;position:relative}
+  .badge .n{position:absolute;font-weight:900;font-size:34px;color:#c2185b;letter-spacing:-1px;top:32px}
+  .txt{flex:1;text-align:center;padding-right:24px}
+  .kicker{font-weight:800;font-size:15px;letter-spacing:4px;color:#c2185b}
+  .big{font-weight:900;font-size:30px;color:#3b0a52;margin-top:6px}
+</style></head>
+<body><div class="box">
+  <div class="badge">
+    <svg width="120" height="104" viewBox="0 0 120 104" id="laurel"></svg>
+    <div class="n" id="n">16</div>
+  </div>
+  <div class="txt"><div class="kicker">CLAUDE CODE PLUGIN</div><div class="big"><span id="n2">16</span> Skills In One Install</div></div>
+</div>
+<script>
+  const N = new URLSearchParams(location.search).get('n') || '16';
+  document.getElementById('n').textContent = N; document.getElementById('n2').textContent = N;
+  const svg = document.getElementById('laurel'), ns = 'http://www.w3.org/2000/svg';
+  // a laurel wreath: leaves along two arcs that rise from the bottom centre to either side
+  const cx = 60, cy = 50, r = 38;
+  function leaf(theta, tilt, fill) {
+    const t = theta * Math.PI / 180;
+    const x = cx + r * Math.cos(t), y = cy + r * Math.sin(t);
+    const e = document.createElementNS(ns, 'ellipse');
+    e.setAttribute('cx', x.toFixed(1)); e.setAttribute('cy', y.toFixed(1)); e.setAttribute('rx', 4.2); e.setAttribute('ry', 9.5);
+    e.setAttribute('transform', `rotate(${theta + tilt} ${x.toFixed(1)} ${y.toFixed(1)})`);
+    e.setAttribute('fill', fill); svg.appendChild(e);
+  }
+  for (let i = 0; i < 6; i++) {
+    leaf(105 + i * 22, 28, i % 2 ? '#e0247a' : '#c2185b');   // left branch, bottom to upper-left
+    leaf(75 - i * 22, -28, i % 2 ? '#e0247a' : '#c2185b');   // right branch, bottom to upper-right
+  }
+  window.__ready = true;
+</script>
+</body></html>
