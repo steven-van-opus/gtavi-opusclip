@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "opusclip": {
+      "type": "http",
+      "url": "https://mcp.opus.pro/mcp"
+    }
+  }
+}

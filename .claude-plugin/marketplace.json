@@ -1,0 +1,22 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "gtavi-opusclip",
+  "description": "GTA 6 stream clipping desk for Claude Code, built on OpusClip's API and MCP server.",
+  "owner": {
+    "name": "[OWNER]"
+  },
+  "plugins": [
+    {
+      "name": "gtavi-opusclip",
+      "source": "./",
+      "description": "16 skills: find GTA 6 streams, scan whole VODs locally, pick moments, clip them with OpusClip, write hooks and copy, follow the clip rules, schedule and track results.",
+      "category": "productivity",
+      "tags": [
+        "gta6",
+        "clipping",
+        "opusclip",
+        "video"
+      ]
+    }
+  ]
+}
