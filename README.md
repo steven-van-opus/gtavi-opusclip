@@ -34,7 +34,7 @@ GTA 6 just broke the streaming record for a game launch: 7.91M people watching a
 
 **2. Connect OpusClip.** Either way works for links up to 10 h. GTA 6 launch VODs are longer, so their windows are cut locally (`cut_windows.py`) and uploaded: `opusclip_api.py batch` does the upload for you, or use `opusclip_create_upload_link` over MCP.
 
-- **MCP (interactive).** The plugin bundles OpusClip's hosted MCP server, `https://mcp.opus.pro/mcp`. Run `/mcp`, pick `opusclip` and authenticate; you sign in on OpusClip's own OAuth page in your browser. OpusClip MCP tool calls need a Pro (Beta), Max or Business plan.
+- **MCP (interactive).** The plugin bundles OpusClip's hosted MCP server, `https://mcp.opus.pro/mcp`. Run `/reload-plugins` (or start a new session), then `/mcp`, pick `plugin:gtavi-opusclip:opusclip` and authenticate; you sign in on OpusClip's own OAuth page in your browser. OpusClip MCP tool calls need a Pro (Beta), Max or Business plan.
 - **REST API (scripts and automation).** Create a key at [clip.opus.pro/dashboard](https://clip.opus.pro/dashboard) → API Access → Create key, then export it in your shell. Never commit it.
 
   ```bash
