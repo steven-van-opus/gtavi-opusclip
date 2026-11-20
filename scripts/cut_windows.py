@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """cut_windows.py: cut exact time windows out of a stream VOD (or a local file), ready to upload.
 
-  # one window from a YouTube VOD at 1080p:
-  python3 -I cut_windows.py --source qSyo5d-dVzA --start 4:11:30 --end 4:14:30 --out alligator.mp4
+  # one window from a YouTube VOD at 1080p (times as the VOD plays now):
+  python3 -I cut_windows.py --source qSyo5d-dVzA --start 4:13:54 --end 4:16:54 --out alligator.mp4
+  # the same window from a scan's times, for a VOD that plays them 144 s later now (see timeline.py):
+  python3 -I cut_windows.py --source qSyo5d-dVzA --start 4:11:30 --end 4:14:30 --timeline-offset 144 --out alligator.mp4
   # every "upload" job in a plan written by plan_jobs.py (writes job["file"] back into the plan):
   python3 -I cut_windows.py --plan plan.json
 
@@ -17,6 +19,9 @@ For YouTube the route is decided again before every cut, from yt-dlp --print pro
 (http_dash_segments = fragments, https = processed): YouTube processes a VOD into whole files some time
 after the stream, and from then on answers every fragment request with the whole file. ytfrag.py checks
 once more before its first request; if it finds the VOD processed (exit 3), the cut goes to yt-dlp.
+A processed VOD can play a fragment scan's times later (IShowSpeed's launch VOD: 144 s), so --plan
+first moves the plan onto the VOD as it is served now: timeline.py measures the shift once from the
+scan folder's audio.m4a and keeps it in run.json (a weak match stops; --timeline-offset sets it).
 Then the frame rate is checked: OpusClip local uploads need an integer frame rate, so a 59.94 or
 29.97 fps cut is re-encoded to 60 or 30 fps.
 """
@@ -186,6 +191,32 @@ def cut(source, start, end, out, height=1080, audio=True, method='auto', fix_fps
     return {'file': out, 'method': how, 'fps': fps, 'start': start, 'end': end}
 
 
+def align_plan(plan, path, explicit=None):
+    """Before any cut: put the plan's windows on the VOD as YouTube serves it now. A scan of a VOD's 2-second
+    fragments keeps their timeline, which a processed VOD can play later; timeline.py measures that shift once
+    (from the scan folder's run.json and audio.m4a) and the plan is moved onto it and saved."""
+    import timeline
+    tl = plan.get('timeline') or {}
+    if explicit is not None:
+        seconds, state = explicit, 'given'
+    elif tl.get('state') in timeline.FINAL:
+        return
+    else:
+        todo = [j for j in plan.get('jobs', []) if j.get('route') == 'upload' and j.get('cut')
+                and not (j.get('file') and os.path.isfile(j['file']))]
+        if not todo or not youtube_id(plan.get('source') or ''):
+            return
+        scan_dir = tl.get('scanDir') or os.path.dirname(os.path.abspath(path))
+        seconds, state = timeline.resolve(scan_dir, plan.get('source'), timeline.scan_mids(plan, todo))
+        if state == 'none' and not tl:
+            return      # no vodwatch scan behind this plan: nothing to check or record
+    moved = timeline.rebase_plan(plan, seconds, state)
+    with open(path, 'w') as w:
+        json.dump(plan, w, indent=2)
+    if moved:
+        print(f'{path}: {moved} job(s) moved to VOD time = scan time + {seconds:.2f} s', file=sys.stderr)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0], epilog=__doc__.split('\n\n', 1)[1],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -200,6 +231,9 @@ def main(argv=None):
                     help='force the YouTube method (auto asks yt-dlp before every cut whether the VOD is still served '
                          'as 2-second fragments; ytfrag.py refuses a processed VOD, which then goes to yt-dlp)')
     ap.add_argument('--keep-fps', action='store_true', help='do not normalize fractional frame rates')
+    ap.add_argument('--timeline-offset', type=float, metavar='SECONDS',
+                    help='the VOD as served now plays the given times this much later: cut start+SECONDS to '
+                         'end+SECONDS. With --plan it replaces the shift timeline.py would measure (0 = none)')
     a = ap.parse_args(argv)
     for tool in ('ffmpeg', 'ffprobe'):
         if not shutil.which(tool):
@@ -207,6 +241,7 @@ def main(argv=None):
             return 2
     if a.plan:
         plan = json.load(open(a.plan))
+        align_plan(plan, a.plan, a.timeline_offset)
         done = 0
         for job in plan.get('jobs', []):
             c = job.get('cut')
@@ -226,7 +261,11 @@ def main(argv=None):
         return 0
     if not (a.source and a.start is not None and a.end is not None and a.out):
         ap.error('give --plan, or --source --start --end --out')
-    r = cut(a.source, parse_time(a.start), parse_time(a.end), a.out, a.height, not a.no_audio, a.method, not a.keep_fps)
+    shift = a.timeline_offset or 0.0
+    r = cut(a.source, parse_time(a.start) + shift, parse_time(a.end) + shift, a.out, a.height, not a.no_audio, a.method,
+            not a.keep_fps)
+    if shift:
+        r['timeline_offset'] = shift
     print(json.dumps(r))
     return 0
 

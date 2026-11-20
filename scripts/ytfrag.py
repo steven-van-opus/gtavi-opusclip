@@ -22,7 +22,8 @@ every 1,500 fragments (YouTube throttles a URL after a few thousand). Downloads 
 fragments stay on disk until the file is assembled, in <out>.raw.frags<format>/ for `track` (for
 example speed_audio.m4a.raw.frags139/) and in <out>.parts/ for `window`. Both write <out>.part and
 rename it to <out> only when ffmpeg succeeds, so an interrupted run never leaves a short <out> behind,
-and the fragments are deleted only after that. Never run `yt-dlp -J` on a 24-hour VOD (its info JSON
+and the fragments are deleted only after that (or, for `window`, as soon as the VOD turns out to be
+processed: its fragments can't be resumed then). Never run `yt-dlp -J` on a 24-hour VOD (its info JSON
 can be hundreds of MB); this script only asks for the protocol, -g and the duration.
 Common formats: video 299 = 1080p60, 137 = 1080p, 298 = 720p60, 134 = 360p; audio 140 = AAC 128k,
 139 = AAC 48k (plenty for transcription).
@@ -265,9 +266,13 @@ def cmd_window(argv):
     opts = dict(zip(argv[4::2], argv[5::2]))
     vf, af, pad = opts.get('--video', '299'), opts.get('--audio', '140'), float(opts.get('--pad', 3))
     src = Source(vid)
-    src.require_fragments(vf, *([af] if af and af != 'none' else []))   # before the first request
-    seg = Source.SEG
     work = out + '.parts'
+    try:
+        src.require_fragments(vf, *([af] if af and af != 'none' else []))   # before the first request
+    except NotFragmented:
+        shutil.rmtree(work, ignore_errors=True)   # fragments an earlier run left can't be resumed any more
+        raise
+    seg = Source.SEG
     os.makedirs(work, exist_ok=True)
     vpath, apath = os.path.join(work, 'v.mp4'), os.path.join(work, 'a.m4a')
     sq0, sq1 = max(0, int((a - pad) // seg)), int((b + pad) // seg) + 1
@@ -291,10 +296,9 @@ def cmd_window(argv):
             astart, _ = probe_span(apath)
             cmd += ['-itsoffset', f'{astart - vstart:.3f}', '-i', apath, '-map', '0:v:0', '-map', '1:a:0']
     except NotFragmented:
-        try:
-            os.rmdir(work)  # only when empty
-        except OSError:
-            pass
+        # fragments of a processed VOD can't be resumed (and are on the old timeline), so nothing here is kept,
+        # not even a video track that came through before the audio turned out to be a whole file
+        shutil.rmtree(work, ignore_errors=True)
         raise
     part = out + '.part'
     cmd += ['-ss', f'{a - vstart:.3f}', '-t', f'{b - a:.3f}', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '16',

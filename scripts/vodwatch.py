@@ -15,7 +15,10 @@ What "run" does (every step resumes if you run it again):
                links: yt-dlp -f ba/w (never full-quality video). Local files: ffmpeg. Then mono 16 kHz.
   3. scan      loudness per second + whisper.cpp transcript in 20-minute chunks (scan_vod.py)
   4. rank      every 30 s window scored, best moments picked with reasons and brand-safety flags
-  5. sheets    a 360p frame sheet per top moment, to check the picture (frame_sheet.py)
+  5. sheets    a 360p frame sheet per top moment, to check the picture (frame_sheet.py). A scan of
+               2-second fragments keeps their timeline, and a processed VOD can play it later
+               (IShowSpeed's launch VOD: 144 s): timeline.py measures that shift once and keeps it in
+               run.json, and sheets, cuts and the plan add it.
   6. plan      OpusClip jobs with a credit estimate (plan_jobs.py): URL + time range for sources up
                to 10 h, local cut + upload for longer ones. Nothing is sent to OpusClip.
   7. report    report.md: hours scanned, moments found, wall time per step, cost of compute ($0, local)
@@ -35,6 +38,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import timeline  # noqa: E402
 from plan_jobs import source_kind, youtube_id  # noqa: E402
 from ytfrag import EXIT_NOT_FRAGMENTED, FRAGMENTED  # noqa: E402
 
@@ -124,6 +128,20 @@ def audio_line(info):
     return None
 
 
+def timeline_line(run, plan=None):
+    """report.md's "- Timeline:" line: whether this scan's times still match the VOD as YouTube serves it now."""
+    rec = run.get('timeline_offset')
+    if isinstance(rec, dict) and rec.get('seconds') is not None:
+        return (f'VOD time = scan time + {float(rec["seconds"]):.2f} s. YouTube processed the VOD after this scan of its '
+                '2-second fragments (measured, kept in run.json); frame sheets, cuts and plan.json use the VOD\'s '
+                'times, moments.md keeps the scan\'s.')
+    if timeline.basis(run) in timeline.SCAN_FROM_FRAGMENTS and (run.get('source') or {}).get('kind') == 'youtube':
+        return ('scanned from 2-second fragments. Once YouTube processes the VOD, the same moments can play later; '
+                'frame_sheet.py --moments and cut_windows.py --plan check that before they fetch anything'
+                + (', and url jobs wait for timeline.py --plan' if plan and plan.get('route') == 'url' else '') + '.')
+    return None
+
+
 def to_compact_audio(src, dest):
     """src -> mono 16 kHz AAC at 32 kbps. ffmpeg writes dest.part, which becomes dest only when ffmpeg
     succeeds, so an interrupted run never leaves a short audio.m4a that the next run would accept."""
@@ -139,10 +157,31 @@ def to_compact_audio(src, dest):
     return dest
 
 
+FRAGMENT_SCAN_FILES = ('transcript.jsonl', 'loudness.tsv')
+
+
+def set_aside_fragment_scan(out):
+    """Before a scan starts over on a processed VOD's audio: move transcript and loudness rows written in the
+    fragment timeline (scan_frags.py during an interrupted ytfrag.py download, or an earlier audio.m4a) out of the
+    way, so scan_vod.py doesn't resume on them and mix two timelines. They are renamed, not deleted."""
+    moved = []
+    for name in FRAGMENT_SCAN_FILES:
+        p = os.path.join(out, name)
+        if os.path.exists(p):
+            stem, ext = os.path.splitext(name)
+            os.replace(p, os.path.join(out, f'{stem}.fragment-timeline{ext}'))
+            moved.append(name)
+    if moved:
+        print(f'set aside {" and ".join(moved)} (made from the 2-second fragments, whose timeline the processed VOD '
+              f'does not keep) as *.fragment-timeline.*; the scan starts over on the processed audio', file=sys.stderr)
+    return moved
+
+
 def get_audio(meta, out, jobs=16, fmt='139', info=None):
     """OUT/audio.m4a, the mono 16 kHz track the scan reads. `info` (run.json's "audio") records how it was fetched.
     A YouTube VOD's protocol is asked right here, before the download, every time this has to download."""
     info = {} if info is None else info
+    before = dict(info)     # how the folder's earlier audio (if any) was fetched
     dest = os.path.join(out, 'audio.m4a')
     if os.path.exists(dest) and os.path.getsize(dest) > 0:
         print(f'audio exists: {dest}', file=sys.stderr)
@@ -177,6 +216,8 @@ def get_audio(meta, out, jobs=16, fmt='139', info=None):
         if os.path.isdir(stale):
             print(f'note: {stale} holds fragments from a run made while the VOD was still served as fragments; '
                   'they cannot be resumed now, so delete that folder to free the space', file=sys.stderr)
+        if not (before.get('via') == 'yt-dlp' and before.get('protocol')):   # rows from another timeline
+            set_aside_fragment_scan(out)
     info.update(via='yt-dlp', format=sel)
     raw = os.path.join(out, 'audio_src')
     sh(['yt-dlp', '--no-warnings', '--no-playlist', '-f', sel, '-o', raw + '.%(ext)s', meta['url']])
@@ -218,7 +259,11 @@ def cmd_run(a):
     transcript = None
     if a.captions == 'youtube' and meta['kind'] == 'youtube':
         transcript = stage(run, out, 'captions', lambda: youtube_captions(meta, out))
+    old = os.path.join(out, 'audio.m4a')
+    had_audio = os.path.isfile(old) and os.path.getsize(old) > 0
     audio = stage(run, out, 'audio', lambda: get_audio(meta, out, a.jobs, a.audio_format, run.setdefault('audio', {})))
+    if not had_audio and run.pop('timeline_offset', None) is not None:   # measured against audio that is gone
+        save_run(out, run)
     scan = PY + [os.path.join(HERE, 'scan_vod.py'), audio, out, '--chunk', str(a.chunk), '--threads', str(a.threads)]
     if a.model:
         scan += ['--model', a.model]
@@ -226,12 +271,19 @@ def cmd_run(a):
         scan.append('--skip-whisper')
     stage(run, out, 'scan', lambda: sh(scan))
     rank_args(a, out, run, transcript)
+    shift, mids = 0.0, timeline.moment_mids(out)
+    if meta['kind'] == 'youtube' and mids and (a.sheets or not a.no_plan):
+        # a fragment scan of a VOD YouTube has processed since: measure the shift once (kept in run.json), so the
+        # sheets fetch the right windows and plan_jobs.py moves the plan onto the VOD's timeline
+        shift, _ = timeline.resolve(out, meta['url'], mids, run=run)
+        save_run(out, run)
     if a.sheets:
         src = meta['url'] if meta['kind'] != 'file' else meta['url']
         try:
             stage(run, out, 'sheets', lambda: sh(PY + [os.path.join(HERE, 'frame_sheet.py'), '--moments',
                                                       os.path.join(out, 'moments.json'), '--source', src, '--top',
-                                                      str(a.sheets), '--out-dir', os.path.join(out, 'sheets')]))
+                                                      str(a.sheets), '--out-dir', os.path.join(out, 'sheets'),
+                                                      '--timeline-offset', f'{shift:.2f}']))
         except subprocess.CalledProcessError as e:
             print(f'frame sheets failed ({e}); continuing without them', file=sys.stderr)
     if not a.no_plan:
@@ -290,6 +342,9 @@ def write_report(out, run):
     au = audio_line(run.get('audio'))
     if au:
         lines.insert(4, f'- Audio: {au}')   # right after the credit line
+    tl = timeline_line(run, plan)
+    if tl:
+        lines.insert(5 if au else 4, f'- Timeline: {tl}')
     if plan:
         t = plan['totals']
         lines += [f'## OpusClip plan (not sent)', '',
@@ -301,6 +356,8 @@ def write_report(out, run):
                   '```bash']
         if plan['route'] == 'upload':
             lines.append(f'python3 -I "{HERE}/cut_windows.py" --plan "{out}/plan.json"')
+        elif (plan.get('timeline') or {}).get('state') in ('unchecked', 'pending'):
+            lines.append(f'python3 -I "{HERE}/timeline.py" --plan "{out}/plan.json"   # once YouTube has processed the VOD')
         lines += [f'python3 -I "{HERE}/opusclip_api.py" batch "{out}/plan.json" --yes --wait', '```', '']
     lines += ['## Top moments', '']
     for x in m.get('moments', [])[:10]:

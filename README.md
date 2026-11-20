@@ -95,7 +95,7 @@ python3 -I scripts/opusclip_api.py download <projectId> --top 5 --out clips/ --p
    - reaction words ("no way", "oh my god", screams, laughter),
    - talking speed.
 
-   Your machine does the work, so compute is free. Before every download it asks yt-dlp how YouTube serves the VOD. Right after a stream that is often 2-second fragments that `yt-dlp --download-sections` can't cut, so `ytfrag.py` fetches them directly, rotating throttled URLs and resuming. Once YouTube has processed the VOD into whole files (the launch-day VODs took about a day), yt-dlp downloads the audio and cuts the windows itself.
+   Your machine does the work, so compute is free. Before every download it asks yt-dlp how YouTube serves the VOD. Right after a stream that is often 2-second fragments that `yt-dlp --download-sections` can't cut, so `ytfrag.py` fetches them directly, rotating throttled URLs and resuming. Once YouTube has processed the VOD into whole files (the launch-day VODs took about a day), yt-dlp downloads the audio and cuts the windows itself. A scan of the fragments keeps their timeline, which the processed VOD can play later (IShowSpeed's launch VOD: 144 s), so `timeline.py` measures that shift once against the scan's own audio, and frame sheets, cuts and the plan add it.
 3. **Pick and verify.** `pick-moments` puts a frame sheet of each candidate in front of Claude and scores it on hook, payoff, reaction, readability and novelty. Slurs, sexual content, spoilers and leaks are hard skips; profanity gets bleeped.
 4. **Clip with OpusClip.** Each picked window becomes an OpusClip project using these settings:
    - ClipAnything, genre Gaming;
@@ -195,7 +195,7 @@ All Python is stdlib-only and runs with `python3 -I`. Every script has `--help`.
 |---|---|
 | `opusclip_api.py` | OpusClip REST client: create (URL, uploadId or file via 4-step V2 upload), status/wait, clips and download (with `--plan`, in stream time), transcript, censor, social copy, post, schedule. `--dry-run` prints the exact requests; spending and publishing need `--yes`. |
 | `vodwatch.py` | One command for the whole-VOD scan: resolve, audio, scan, rank, frame sheets, OpusClip plan, report. Resumable. |
-| `ytfrag.py` | Exact windows or whole audio tracks from YouTube VODs still served as 2-second fragments; rotates throttled URLs, retries and resumes. Stops before its first request on a processed VOD (yt-dlp takes those). |
+| `ytfrag.py` | Exact windows or whole audio tracks from YouTube VODs still served as 2-second fragments; rotates throttled URLs, retries and resumes. Stops before its first request on a processed VOD (yt-dlp takes those). `timeline.py` measures how far the processed VOD has moved from a fragment scan (`--timeline-offset` sets it by hand). |
 | `scan_vod.py` | Loudness per second and a chunked whisper.cpp transcript of a full audio track, with coarse 30 s ranking. |
 | `scan_frags.py` | Transcribes chunks while `ytfrag.py track` is still downloading (VODs still served as fragments). |
 | `rank_moments.py` | Scores every window (local loudness, jumps, rarity-weighted reaction cues, speech rate, music and loop penalties), picks moments with reasons and brand-safety flags, and measures recall with `--eval`. |

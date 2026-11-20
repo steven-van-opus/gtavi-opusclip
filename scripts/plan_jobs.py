@@ -13,6 +13,12 @@ sit close together, and routes every job one of two ways:
           names Twitch but not Kick), or is a local file.
 Credits: 1 per minute of processed video, and every API project costs at least 10 credits, so
 merging nearby moments saves credits. Nothing is sent: run opusclip_api.py batch plan.json --yes.
+Times: a vodwatch scan made from a YouTube VOD's 2-second fragments keeps their timeline, which the
+processed VOD can play later (IShowSpeed's launch VOD: 144 s). When run.json next to moments.json
+holds that shift (timeline.py measures it), or --timeline-offset gives it, every window is moved
+onto the VOD's timeline (scanStart/scanEnd keep the scan's). plan["timeline"] records the state:
+"unchecked" means nobody has compared the scan with the processed VOD yet, so cut_windows.py
+--plan checks before it cuts and batch holds back url jobs until timeline.py --plan has run.
 """
 import argparse
 import json
@@ -22,6 +28,7 @@ import sys
 import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import timeline  # noqa: E402
 from opusclip_api import (MAX_SOURCE_SECONDS, UsageError, build_project_body, estimate_credits, hms,  # noqa: E402
                           parse_durations, parse_time)
 
@@ -102,9 +109,13 @@ def route_for(kind, duration, forced=None):
 
 def build_plan(moments, source, duration=None, pad_before=60, pad_after=45, merge_gap=120, max_range=1200,
                route='auto', prompt=DEFAULT_PROMPT, template='preset-fancy-Gameplay', genre='Gaming',
-               durations='0-30,30-60', model='ClipAnything', lang='en', title_prefix='', out_dir='cuts', credit=''):
+               durations='0-30,30-60', model='ClipAnything', lang='en', title_prefix='', out_dir='cuts', credit='',
+               shift=0.0):
+    """shift: seconds the VOD as served now plays the moments' (scan) times later; every window is moved by it."""
     kind = source_kind(source)
     rt, notes = route_for(kind, duration, route)
+    if shift:
+        moments = [dict(m, start=m['start'] + shift, end=m['end'] + shift) for m in moments]
     if duration:
         outside = [m for m in moments if m['start'] >= duration]
         if outside:
@@ -131,6 +142,8 @@ def build_plan(moments, source, duration=None, pad_before=60, pad_after=45, merg
                    'moments': w['moments'], 'estimatedCredits': estimate_credits(seconds), 'request': req,
                    'cut': {'source': source, 'start': round(w['start'], 2), 'end': round(w['end'], 2),
                            'out': os.path.join(out_dir, f'{jid}_{hms(w["start"]).replace(":", "-")}.mp4')}}
+        if shift:
+            job.update(scanStart=round(w['start'] - shift, 2), scanEnd=round(w['end'] - shift, 2))
         jobs.append(job)
     total_min = sum(j['end'] - j['start'] for j in jobs) / 60
     return {
@@ -167,6 +180,9 @@ def main(argv=None):
     ap.add_argument('--credit', default='', help='credit line to carry with the clips, e.g. "IShowSpeed (YouTube)"')
     ap.add_argument('--cut-dir', default='cuts')
     ap.add_argument('--out', default='plan.json')
+    ap.add_argument('--timeline-offset', type=float, metavar='SECONDS',
+                    help='the VOD as served now plays the moments\' times this much later (default: the shift kept in '
+                         'run.json next to moments.json, see timeline.py; 0 = send the scan\'s times as they are)')
     a = ap.parse_args(argv)
     try:
         moments, src_meta = load_moments(a.moments)
@@ -181,9 +197,23 @@ def main(argv=None):
             moments = sorted(moments, key=lambda m: m['rank'] or 1e9)[:a.top]
         if not moments:
             raise UsageError('no moments selected')
+        scan_dir = os.path.dirname(os.path.abspath(a.moments))
+        shift, state, scan = timeline.known(scan_dir, source)   # what run.json already knows; YouTube isn't asked
+        if a.timeline_offset is not None:
+            shift, state = a.timeline_offset, 'given'
         plan = build_plan(moments, source, a.source_duration, a.pad_before, a.pad_after, a.merge_gap, a.max_range,
                           a.route, a.prompt, a.template, a.genre, a.durations, a.model, a.lang, a.title_prefix,
-                          a.cut_dir, a.credit or src_meta.get('label', ''))
+                          a.cut_dir, a.credit or src_meta.get('label', ''), shift)
+        if scan is not None or state == 'given':
+            plan['timeline'] = {'scan': scan, 'scanDir': scan_dir, 'offset': shift, 'state': state}
+        if state == 'unchecked':
+            plan['notes'].insert(0, 'times are from a scan of the VOD\'s 2-second fragments that nobody has compared '
+                                    'with the processed VOD yet: cut_windows.py --plan checks before it cuts, and batch '
+                                    'holds back url jobs until timeline.py --plan has run (once YouTube has processed '
+                                    'the VOD)')
+        elif shift:
+            plan['notes'].insert(0, f'windows moved to VOD time = scan time + {shift:.2f} s ({state}); '
+                                    'scanStart/scanEnd keep the scan\'s times')
     except UsageError as e:
         print(f'error: {e}', file=sys.stderr)
         return 2

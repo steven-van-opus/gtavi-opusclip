@@ -10,11 +10,16 @@ YouTube now serves the GTA 6 launch VODs as processed files (yt-dlp protocol `ht
   - Twitch, Kick and other links: `-f ba/w`, never full-quality video.
 
   `run.json` (`audio`) and `report.md` (`- Audio:`) say which way the audio came. A run that finds fragments left from before the VOD was processed says they can't be resumed.
-- `ytfrag.py` asks for the protocol before its first request and stops on a processed VOD. A reply over 16 MB (no 2-second fragment is that big) stops the download after one round. Both exit with status 3. `window` now writes `<out>.part` and renames it only when ffmpeg succeeds, like `track`.
+- `ytfrag.py` asks for the protocol before its first request and stops on a processed VOD. A reply over 16 MB (no 2-second fragment is that big) stops the download after one round. Both exit with status 3. `window` now writes `<out>.part` and renames it only when ffmpeg succeeds, like `track`, and removes `<out>.parts/` when the VOD turns out to be processed (also when the video track had come through before the audio came back as a whole file).
 - `cut_windows.py` asks before every cut, and so does `frame_sheet.py`, which cuts through it. Fragments go to `ytfrag.py window`; processed VODs to `yt-dlp --download-sections` with the H.264 + AAC renditions first (`299+140` and down the ladder; `134/133` for frame sheets). On ytfrag's exit 3 the cut goes straight to yt-dlp instead of trying every format.
-- `scan_frags.py` drops a chunk whose transcription finishes after the track was assembled, so no 20 minutes are transcribed twice.
-- Docs: the `vodwatch` and `cut-windows` skills, and the README's How it works and Scripts sections, cover both ways YouTube serves a VOD.
-- Tests: `tests/test_download_routing.py`, offline: a fake `yt-dlp` and `whisper-cli` on PATH, mocked HTTP and a local fragment server.
+- Timeline shift. A scan of a VOD's 2-second fragments keeps their timeline, and the processed VOD can play it later: IShowSpeed's launch VOD `qSyo5d-dVzA` plays everything 144 s later (measured by audio cross-correlation), so 1.1.0's sheets and cuts of a fragment scan would have landed 2 min 24 s early.
+  - `timeline.py` (new) finds the shift for a scan folder: 0 for scans whose audio came through yt-dlp, ffmpeg, Twitch or Kick; for a fragment scan (or a 1.0.0 run.json) of a VOD YouTube has processed since, a minute of format 139 at two moments 10+ minutes apart, cross-correlated with the scan's `audio.m4a`. Both must match clearly and agree within 1 s; the result is kept in `run.json` as `timeline_offset`. A weak or disagreeing match, or a fragment scan without its `audio.m4a`, stops and asks for a re-scan or `--timeline-offset`.
+  - `vodwatch.py run`, `frame_sheet.py --moments` and `cut_windows.py --plan` add the shift before they fetch anything; `--timeline-offset SECONDS` sets it by hand on `frame_sheet.py` and `cut_windows.py` (also for single windows) and on `plan_jobs.py`. Sheet tiles keep the scan's times; `sheet.json` records the shift.
+  - `plan_jobs.py` moves the plan onto a shift kept in `run.json` (`scanStart`/`scanEnd` keep the scan's times) and records `plan["timeline"]`. `opusclip_api.py batch` holds back `url` jobs from a fragment scan nobody has checked until `timeline.py --plan` has run; dry runs say so.
+  - When `vodwatch.py` switches a folder to yt-dlp, `transcript.jsonl` and `loudness.tsv` rows from the fragment timeline are set aside (`*.fragment-timeline.*`) instead of being resumed on the processed audio. `report.md` gets a `- Timeline:` line.
+- `scan_frags.py` drops a chunk whose transcription finishes after the track was assembled, so no 20-minute span is written to `transcript.jsonl` twice.
+- Docs: the `vodwatch`, `cut-windows` and `opusclip-clip` skills, and the README's How it works and Scripts sections (edited in place), cover both ways YouTube serves a VOD and the timeline shift.
+- Tests: `tests/test_download_routing.py` and `tests/test_timeline.py`, offline: a fake `yt-dlp` and `whisper-cli` on PATH, mocked HTTP, a local fragment server, and a fake processed VOD that plays the scan's audio 37 s later.
 
 ## 1.0.0 (2026-11-19)
 

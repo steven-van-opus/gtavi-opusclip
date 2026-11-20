@@ -25,7 +25,7 @@ Credits are the user's money. Show the exact requests and the credit estimate, a
 
 Requires `/mcp` to be authenticated (see the `setup` skill).
 
-1. Jobs routed `url` (sources up to 10 h): `opusclip_submit_project` with the VOD URL and the plan's window, using the parameter names the tool's schema shows (URL, range or start/end, model, prompt, clip durations, brand template).
+1. Jobs routed `url` (sources up to 10 h): `opusclip_submit_project` with the VOD URL and the plan's window, using the parameter names the tool's schema shows (URL, range or start/end, model, prompt, clip durations, brand template). If `plan.json` has `"timeline": {"state": "unchecked"}` (or `"pending"`), run `timeline.py --plan` first, once YouTube has processed the VOD (see `vodwatch`).
 
    Jobs routed `upload` (over 10 h, Kick, local files), which includes every GTA 6 launch VOD: run `cut_windows.py --plan` first. Then either use Path B, where `opusclip_api.py batch` does the 4-step V2 upload, or call `opusclip_create_upload_link`, upload the cut exactly as that tool's response says, and pass the returned upload id to `opusclip_submit_project`. The help center lists the MCP submit tool's sources as YouTube or Vimeo, so test a Twitch link before relying on it.
 2. Check progress with `opusclip_list_projects`, then `opusclip_list_clips` and `opusclip_describe_clip`.
@@ -60,6 +60,7 @@ Behaviour of `batch`:
 - No more than 4 projects process at once.
 - It backs off on `429`, stops on `403 API_MONTHLY_CAP_REACHED` (tell the user the `reset_at` date), and saves project ids into the plan so a re-run resumes.
 - `upload` jobs need `cut_windows.py --plan` first.
+- `url` jobs from a scan of a VOD's 2-second fragments are held back until `python3 -I "$S/timeline.py" --plan <plan.json>` has moved them onto the processed VOD's timeline (vodwatch's `report.md` says when).
 
 ## Check every clip before it moves on
 

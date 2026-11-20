@@ -5,6 +5,8 @@ VOD is one file that yt-dlp fetches, so there is nothing to overlap.
 Writes the same transcript.jsonl format as scan_vod.py (chunk = 1200 s = 600 two-second fragments), so
 scan_vod.py can resume from it later. Stops as soon as the assembled track file appears; a chunk whose
 transcription finishes after that is dropped (scan_vod.py transcribes it), so no 20 minutes are written twice.
+If YouTube processes the VOD before the track is assembled, don't resume this transcript on yt-dlp's
+audio: the processed VOD can be on another timeline (vodwatch.py sets such rows aside by itself).
   python3 -I scan_frags.py FRAG_DIR OUT_DIR ASSEMBLED_PATH [--chunks 72] [--model PATH]
 FRAG_DIR is the <out>.raw.frags<format>/ folder that `ytfrag.py track` fills (for example
 speed_audio.m4a.raw.frags139/ for `ytfrag.py track <id> 139 speed_audio.m4a`); --chunks = ceil(VOD seconds / 1200).

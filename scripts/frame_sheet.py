@@ -8,14 +8,17 @@ spoiler or something you can't post. Claude reads the JPG directly.
   # from a local video (stream time = file time + --offset):
   python3 -I frame_sheet.py --video window.mp4 --out sheet.jpg
   # fetch a 360p, silent window of a VOD first (deleted afterwards), then build the sheet:
-  python3 -I frame_sheet.py --source qSyo5d-dVzA --start 4:12:42 --end 4:13:52 --out sheets/01.jpg
+  python3 -I frame_sheet.py --source qSyo5d-dVzA --start 4:15:06 --end 4:16:16 --out sheets/01.jpg
   # the top N picks of a rank_moments.py run:
   python3 -I frame_sheet.py --moments scan/moments.json --source qSyo5d-dVzA --top 8 --out-dir scan/sheets
 
 Writes sheet.jpg (cols x rows tiles, read left to right, top to bottom) and sheet.json with the
 stream time of every tile. VOD windows come through cut_windows.py, which asks yt-dlp how YouTube
 serves the VOD before each window: ytfrag.py while it is still 2-second fragments, yt-dlp
---download-sections (formats 134/133) once YouTube has processed it.
+--download-sections (formats 134/133) once YouTube has processed it. A processed VOD can play a
+fragment scan's times later (IShowSpeed's launch VOD: 144 s), so --moments adds the shift that
+timeline.py measures from the scan folder (run.json, audio.m4a); --timeline-offset SECONDS sets it
+by hand, also for --source. Tile times stay in the scan's timeline; sheet.json records the shift.
 """
 import argparse
 import json
@@ -43,7 +46,7 @@ def duration(path):
         return None
 
 
-def sheet(video, out, start=0.0, length=None, cols=4, rows=3, width=480, offset=0.0):
+def sheet(video, out, start=0.0, length=None, cols=4, rows=3, width=480, offset=0.0, extra=None):
     """Tile cols*rows frames spread evenly over [start, start+length) of the file."""
     total = duration(video) or 0.0
     length = length or max(0.1, total - start)
@@ -71,20 +74,25 @@ def sheet(video, out, start=0.0, length=None, cols=4, rows=3, width=480, offset=
     meta = {'sheet': out, 'video': video, 'cols': cols, 'rows': rows, 'frames': [
         {'tile': i + 1, 'row': i // cols + 1, 'col': i % cols + 1, 'stream_time': t, 'stream_hms': hms(t)}
         for i, t in enumerate(times)]}
+    meta.update(extra or {})
     with open(os.path.splitext(out)[0] + '.json', 'w') as w:
         json.dump(meta, w, indent=2)
     return meta
 
 
-def sheet_from_source(source, start, end, out, cols=4, rows=3, width=480, keep=False):
+def sheet_from_source(source, start, end, out, cols=4, rows=3, width=480, keep=False, shift=0.0):
+    """Sheet of [start, end) in the scan's times; the window fetched is [start+shift, end+shift) of the VOD as it is
+    served now (shift: see timeline.py)."""
     tmpdir = tempfile.mkdtemp(prefix='win_')
     win = os.path.join(tmpdir, 'window.mp4')
+    a, b = start + shift, end + shift
     try:
         if os.path.isfile(source):
-            cut_windows.cut_local(source, start, end, win, audio=False)
+            cut_windows.cut_local(source, a, b, win, audio=False)
         else:
-            cut_windows.cut(source, start, end, win, height=360, audio=False, fix_fps=False)
-        meta = sheet(win, out, 0.0, end - start, cols, rows, width, offset=start)
+            cut_windows.cut(source, a, b, win, height=360, audio=False, fix_fps=False)
+        extra = {'timeline_offset': shift, 'vod_start': round(a, 2), 'vod_end': round(b, 2)} if shift else None
+        meta = sheet(win, out, 0.0, end - start, cols, rows, width, offset=start, extra=extra)
         if keep:
             kept = os.path.splitext(out)[0] + '.mp4'
             shutil.move(win, kept)
@@ -110,20 +118,34 @@ def main(argv=None):
     ap.add_argument('--width', type=int, default=480)
     ap.add_argument('--offset', type=float, default=0.0, help='stream time of the first frame of --video')
     ap.add_argument('--keep-window', action='store_true', help='keep the downloaded 360p window next to the sheet')
+    ap.add_argument('--timeline-offset', type=float, metavar='SECONDS',
+                    help='--source/--moments: the VOD as served now plays the given times this much later, so the '
+                         'window fetched is start+SECONDS to end+SECONDS (default for --moments: what timeline.py '
+                         'measures from the scan folder; for --source: 0)')
     a = ap.parse_args(argv)
     if not shutil.which('ffmpeg'):
         print('error: ffmpeg is not installed', file=sys.stderr)
         return 2
+    if a.video and a.timeline_offset is not None:
+        ap.error('--timeline-offset is for --source and --moments; with --video, --offset sets the stream time')
     if a.moments:
         d = json.load(open(a.moments))
         src = a.source or (d.get('source') or {}).get('url') or (d.get('source') or {}).get('video_id')
         if not src:
             ap.error('--source is required (moments.json has no source)')
+        picks = d.get('moments', [])
+        shift = a.timeline_offset
+        if shift is None and not os.path.isfile(src):
+            import timeline
+            shift, _ = timeline.resolve(os.path.dirname(os.path.abspath(a.moments)), src,
+                                        [(float(m['start']) + float(m['end'])) / 2 for m in picks])
         os.makedirs(a.out_dir, exist_ok=True)
-        for m in d.get('moments', [])[:a.top]:
+        for m in picks[:a.top]:
             out = os.path.join(a.out_dir, f'{m["rank"]:02d}_{m["start_hms"].replace(":", "-")}.jpg')
-            meta = sheet_from_source(src, float(m['start']), float(m['end']), out, a.cols, a.rows, a.width, a.keep_window)
-            print(f'#{m["rank"]} {m["start_hms"]}-{m["end_hms"]} -> {meta["sheet"]}')
+            meta = sheet_from_source(src, float(m['start']), float(m['end']), out, a.cols, a.rows, a.width, a.keep_window,
+                                     shift or 0.0)
+            print(f'#{m["rank"]} {m["start_hms"]}-{m["end_hms"]} -> {meta["sheet"]}'
+                  + (f' (VOD {hms(meta["vod_start"])}-{hms(meta["vod_end"])} as served now)' if shift else ''))
         return 0
     if a.video:
         start = cut_windows.parse_time(a.start) if a.start else 0.0
@@ -131,7 +153,7 @@ def main(argv=None):
         meta = sheet(a.video, a.out, start, length, a.cols, a.rows, a.width, a.offset)
     elif a.source and a.start and a.end:
         meta = sheet_from_source(a.source, cut_windows.parse_time(a.start), cut_windows.parse_time(a.end), a.out,
-                                 a.cols, a.rows, a.width, a.keep_window)
+                                 a.cols, a.rows, a.width, a.keep_window, a.timeline_offset or 0.0)
     else:
         ap.error('give --video, or --source with --start/--end, or --moments')
     print(f'wrote {meta["sheet"]} ({a.cols}x{a.rows}, {meta["frames"][0]["stream_hms"]} to {meta["frames"][-1]["stream_hms"]})')

@@ -959,6 +959,17 @@ def cmd_batch(args, client):
         plan = json.load(f)
     jobs = plan.get('jobs') or []
     todo = [j for j in jobs if not j.get('projectId') and not j.get('skip')]
+    unchecked = [j.get('id') for j in todo if j.get('route') == 'url']
+    if unchecked and (plan.get('timeline') or {}).get('state') in ('unchecked', 'pending'):
+        # OpusClip imports the VOD as YouTube serves it then; a scan of its 2-second fragments can be off that timeline
+        msg = (f'job(s) {", ".join(map(str, unchecked))} use times from a scan of the VOD\'s 2-second fragments that '
+               'nobody has compared with the processed VOD OpusClip imports, which can play them minutes later. Once '
+               f'YouTube has processed the VOD, run: python3 -I timeline.py --plan {args.plan} (it measures the shift '
+               'and moves the windows). To send the scan\'s times as they are, re-plan with plan_jobs.py '
+               '--timeline-offset 0.')
+        if not client.dry_run:
+            raise UsageError(msg)
+        client.log(f'note: {msg}')
     total = sum(j.get('estimatedCredits') or 0 for j in todo)
     _need_yes(args, f'This creates {len(todo)} OpusClip project(s) for about {total} credits in total '
                     f'(10-credit minimum per API project).')

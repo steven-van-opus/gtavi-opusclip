@@ -26,12 +26,16 @@ python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/cut_windows.py" --plan gtavi/scans/<sl
 
 It writes each job's `file` and `fps` back into the plan. Then the `opusclip-clip` skill runs `opusclip_api.py batch`, which uploads with the 4-step V2 flow.
 
+Before the first cut it puts the plan on the VOD as YouTube serves it now. A scan of a VOD's 2-second fragments keeps their timeline, which the processed VOD can play later (IShowSpeed's launch VOD: 144 s). So for a plan from such a scan, once YouTube has processed the VOD, `timeline.py` measures the shift once (a minute of the processed audio cross-correlated with the scan folder's `audio.m4a`, kept in `run.json`) and moves every window by it; `scanStart`/`scanEnd` keep the scan's times. A weak match stops and asks for a re-scan; `--timeline-offset SECONDS` sets the shift by hand.
+
 ## Cut one window
 
 ```bash
 python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/cut_windows.py" --source <youtube id | url | file> \
-  --start 4:11:30 --end 4:14:30 --out gtavi/cuts/speed-alligator.mp4 [--height 1080]
+  --start 4:13:54 --end 4:16:54 --out gtavi/cuts/speed-alligator.mp4 [--height 1080]
 ```
+
+`--start`/`--end` are times as the VOD plays now. For times from a fragment scan of a VOD YouTube has processed since, add the shift: `--timeline-offset 144` for IShowSpeed's launch VOD (`timeline.py <scan folder>` prints it for any scan).
 
 | Source | Method |
 |---|---|

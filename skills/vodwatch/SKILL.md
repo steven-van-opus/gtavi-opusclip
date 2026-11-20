@@ -24,7 +24,7 @@ python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/vodwatch.py" run "<source>" --clips <N
 
 - For a multi-hour VOD, run it in the background. It resumes: finished audio fragments (or yt-dlp's partial download) and finished 20-minute transcript chunks are kept.
 - The steps are resolve → audio → loudness and transcript (`scan_vod.py`) → ranking (`rank_moments.py`) → frame sheets (`frame_sheet.py`) → OpusClip plan (`plan_jobs.py`) → `report.md`.
-- Audio: before every download, vodwatch asks yt-dlp how YouTube serves the VOD (`yt-dlp --print protocol`; nothing is downloaded). Right after a stream it is often `http_dash_segments`: 2-second fragments that `yt-dlp --download-sections` can't cut, so `ytfrag.py track` fetches them. Once YouTube has processed the VOD into whole files (`https`; the launch-day VODs took about a day), every fragment request would return the whole file, so yt-dlp downloads the audio instead (`-f 139/ba/w`). Twitch and Kick go through yt-dlp `-f ba/w`, local files through ffmpeg, and `report.md` says which way the audio came. Frame sheets and cuts make the same check before every window.
+- Audio: before every download, vodwatch asks yt-dlp how YouTube serves the VOD (`yt-dlp --print protocol`; nothing is downloaded). Right after a stream it is often `http_dash_segments`: 2-second fragments that `yt-dlp --download-sections` can't cut, so `ytfrag.py track` fetches them. Once YouTube has processed the VOD into whole files (`https`; the launch-day VODs took about a day), every fragment request would return the whole file, so yt-dlp downloads the audio instead (`-f 139/ba/w`). Twitch and Kick go through yt-dlp `-f ba/w`, local files through ffmpeg, and `report.md` says which way the audio came. Frame sheets and cuts make the same check before every window. A scan of the fragments keeps their timeline, and the processed VOD can play it later (IShowSpeed's launch VOD: 144 s), so before sheets, cuts and the plan, `timeline.py` measures that shift once (a minute of the processed audio cross-correlated with `audio.m4a`), keeps it in `run.json` as `timeline_offset` and adds it; a weak match stops and asks for a re-scan, and `report.md` has a `- Timeline:` line.
 - Faster path: `--captions youtube` ranks on YouTube's auto-captions when they exist and skips whisper. They have no punctuation, so the ranking is a little weaker.
 - If the stream is still live, the script stops. Scan the VOD once it is finished.
 
@@ -45,6 +45,7 @@ python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/vodwatch.py" run "<source>" --clips <N
 ## 4. Hand off
 
 - Show the user the picks (time, what happens, flags) and the plan: number of jobs, route (`url` = OpusClip imports the link with a time range; `upload` = cut locally and upload, for sources over 10 h or Kick), and estimated credits.
+- If `plan.json` has `"timeline": {"state": "unchecked"}` (or `"pending"`), its times come from the VOD's 2-second fragments. `cut_windows.py --plan` checks them by itself; for `url` jobs run `python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/timeline.py" --plan gtavi/scans/<slug>/plan.json` once YouTube has processed the VOD, before anything is sent (`opusclip_api.py batch` holds those jobs back until then).
 - Ask before anything is sent, then continue with the `opusclip-clip` skill.
 - Log provenance (VOD id, in/out, scan date, credit) in `gtavi/provenance.csv`.
 
