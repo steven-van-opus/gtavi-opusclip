@@ -5,11 +5,11 @@
   "description": "Turn GTA 6 streams from any streamer into ready-to-post 9:16 clips with OpusClip: find streams, scan whole VODs locally, pick and verify moments, send them to OpusClip (MCP or REST API), write hooks and per-platform copy, credit the streamer, schedule, and learn from the numbers.",
   "icon": "./.claude-plugin/icon.png",
   "author": {
-    "name": "[OWNER]",
-    "url": "https://github.com/[OWNER]"
+    "name": "steven-van-opus",
+    "url": "https://github.com/steven-van-opus"
   },
-  "homepage": "https://github.com/[OWNER]/gtavi-opusclip",
-  "repository": "https://github.com/[OWNER]/gtavi-opusclip",
+  "homepage": "https://github.com/steven-van-opus/gtavi-opusclip",
+  "repository": "https://github.com/steven-van-opus/gtavi-opusclip",
   "license": "MIT",
   "privacyPolicyUrl": "https://www.opus.pro/privacy-policy",
   "keywords": [

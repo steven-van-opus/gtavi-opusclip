@@ -3,7 +3,7 @@
   "name": "gtavi-opusclip",
   "description": "GTA 6 stream clipping desk for Claude Code, built on OpusClip's API and MCP server.",
   "owner": {
-    "name": "[OWNER]"
+    "name": "steven-van-opus"
   },
   "plugins": [
     {

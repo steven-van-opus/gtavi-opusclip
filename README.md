@@ -28,7 +28,7 @@ GTA 6 just broke the streaming record for a game launch: 7.91M people watching a
 **1. Install the plugin.** In Claude Code:
 
 ```text
-/plugin marketplace add [OWNER]/gtavi-opusclip
+/plugin marketplace add steven-van-opus/gtavi-opusclip
 /plugin install gtavi-opusclip@gtavi-opusclip
 ```
 
@@ -112,7 +112,7 @@ python3 -I scripts/opusclip_api.py download <projectId> --top 5 --out clips/ --p
 
 **Safety built in.** `hooks/hooks.json` makes Claude Code ask before this plugin's `opusclip_api.py` or an OpusClip MCP tool spends credits or publishes. For MCP it asks before every OpusClip tool except the documented read-only ones; for the script it checks each call in a command, so a dry run chained in front of a real run doesn't hide it. On `mcp.opus.pro`, posting and scheduling happen the moment the tool runs, so the hook matters. It doesn't cover other tools, such as the CLI in OpusClip's official plugin. Your API key is read from the environment and never printed, and the MCP signs in with OAuth.
 
-Want to see the scanner on a real 23-hour stream? [vodwatch](https://github.com/[OWNER]/vodwatch) is the same scanner as a standalone skill, with an example run.
+Want to see the scanner on a real 23-hour stream? See the example run in [`examples/ishowspeed-gta6-launch/`](examples/ishowspeed-gta6-launch/).
 
 ## Skills
 
@@ -218,7 +218,7 @@ Tests: `python3 -m unittest discover -s tests -v` (the OpusClip HTTP layer, yt-d
 
 <details><summary><b>Who made this? Is it official, or affiliated with Rockstar, IShowSpeed or Kai Cenat?</b></summary>
 
-It isn't OpusClip's official plugin (that's `opusclip@opus-skills`), but it isn't independent of OpusClip either: [OWNER] made it for OpusClip's GTA 6 launch campaign. It's open source and uses OpusClip's public API and MCP server. It is not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed or Kai Cenat. The art is original: no Rockstar logos, key art or game wordmarks.
+It isn't OpusClip's official plugin (that's `opusclip@opus-skills`), but it isn't independent of OpusClip either: steven-van-opus made it for OpusClip's GTA 6 launch campaign. It's open source and uses OpusClip's public API and MCP server. It is not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed or Kai Cenat. The art is original: no Rockstar logos, key art or game wordmarks.
 </details>
 
 <details><summary><b>What does it cost?</b></summary>
@@ -275,7 +275,7 @@ The plugin itself collects nothing.
 
 ## Disclaimer
 
-- **Who made this.** [OWNER] made this plugin for OpusClip as part of OpusClip's GTA 6 launch campaign, so it is not an independent review or recommendation of OpusClip.
+- **Who made this.** steven-van-opus made this plugin for OpusClip as part of OpusClip's GTA 6 launch campaign, so it is not an independent review or recommendation of OpusClip.
 - **Affiliation.** Not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed, Kai Cenat or any streamer shown. Footage belongs to its creators: credit them, transform it, and take it down when asked.
 - **Earnings.** The examples are illustrative math from published campaign terms (Nov 19, 2026), not typical or expected results. Most clips earn $0.
 - **Product claims.** OpusClip product details follow OpusClip's public docs and pricing pages as of Nov 19, 2026; check them before you rely on them.
