@@ -1,0 +1,9 @@
+{
+  "name": "gtavi-opusclip-render",
+  "private": true,
+  "type": "module",
+  "description": "Only needed for render.mjs (title cards, countdown headers, README art).",
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}
