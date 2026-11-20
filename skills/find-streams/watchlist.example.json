@@ -1,0 +1,17 @@
+[
+  {
+    "name": "IShowSpeed",
+    "youtube": "@IShowSpeed",
+    "note": "Confirm the handle on YouTube before use."
+  },
+  {
+    "name": "Kai Cenat",
+    "twitch": "kaicenat",
+    "note": "Confirm on Twitch. His YouTube VOD uploads are on a separate live channel; add its /streams URL as \"youtube\" once confirmed."
+  },
+  {
+    "name": "Example Kick streamer",
+    "kick": "example-slug",
+    "note": "Kick channels are listed as links to open by hand."
+  }
+]
