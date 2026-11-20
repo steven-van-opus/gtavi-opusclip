@@ -1,0 +1,21 @@
+# work folders and media made by the desk
+gtavi/
+scans/
+cuts/
+clips/
+vodwatch_out/
+*.mp4
+*.m4a
+*.wav
+*.part
+*.frags*/
+*.parts/
+# local tooling
+node_modules/
+scripts/node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+# never commit credentials
+.env
+*.key
