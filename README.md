@@ -216,9 +216,9 @@ Tests: `python3 -m unittest discover -s tests -v` (the OpusClip HTTP layer, yt-d
 
 ## FAQ
 
-<details><summary><b>Who made this? Is it official, or affiliated with Rockstar, IShowSpeed or Kai Cenat?</b></summary>
+<details><summary><b>Is it official, or affiliated with Rockstar, IShowSpeed or Kai Cenat?</b></summary>
 
-It isn't OpusClip's official plugin (that's `opusclip@opus-skills`), but it isn't independent of OpusClip either: steven-van-opus made it for OpusClip's GTA 6 launch campaign. It's open source and uses OpusClip's public API and MCP server. It is not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed or Kai Cenat. The GTA VI logo in the header art is Take-Two Interactive's trademark, shown only to identify the game; the pixel buddies and the rest of the art are original.
+It isn't OpusClip's official plugin (that's `opusclip@opus-skills`). It's open source and uses OpusClip's public API and MCP server. It is not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed or Kai Cenat. The GTA VI logo in the header art is Take-Two Interactive's trademark, shown only to identify the game; the pixel buddies and the rest of the art are original.
 </details>
 
 <details><summary><b>What does it cost?</b></summary>
@@ -275,7 +275,6 @@ The plugin itself collects nothing.
 
 ## Disclaimer
 
-- **Who made this.** steven-van-opus made this plugin for OpusClip as part of OpusClip's GTA 6 launch campaign, so it is not an independent review or recommendation of OpusClip.
 - **Affiliation.** Not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed, Kai Cenat or any streamer shown. Footage belongs to its creators: credit them, transform it, and take it down when asked.
 - **Earnings.** The examples are illustrative math from published campaign terms (Nov 19, 2026), not typical or expected results. Most clips earn $0.
 - **Product claims.** OpusClip product details follow OpusClip's public docs and pricing pages as of Nov 19, 2026; check them before you rely on them.
