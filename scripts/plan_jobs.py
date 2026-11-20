@@ -152,7 +152,7 @@ def build_plan(moments, source, duration=None, pad_before=60, pad_after=45, merg
         'totals': {'jobs': len(jobs), 'minutes': round(total_min, 1),
                    'estimatedCredits': sum(j['estimatedCredits'] for j in jobs)},
         'notes': notes + ['every API project costs at least 10 credits (web submissions have no minimum)',
-                          'Pro Beta and Max: 4 projects processing at once, 15 h (900 credits) of API use a month',
+                          'Pro and Max: 4 projects processing at once, 15 h (900 credits) of API use a month',
                           'nothing has been sent: review, then run opusclip_api.py batch plan.json --yes'],
     }
 

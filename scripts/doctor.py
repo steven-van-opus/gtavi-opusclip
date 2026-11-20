@@ -73,7 +73,7 @@ def checks():
         pass
     key = os.environ.get('OPUSCLIP_API_KEY')
     add('OPUSCLIP_API_KEY (scripts only)', key, 'set' if key else 'not set',
-        'clip.opus.pro/dashboard -> API Access -> Create key (Pro Beta, Max or Business); export it in your shell, '
+        'clip.opus.pro/dashboard -> API Access -> Create key (Pro (limited API access), Max or Business); export it in your shell, '
         'never paste it into a file in this repo. Interactive use can go through the OpusClip MCP (/mcp) instead.',
         required=False)
     return out
