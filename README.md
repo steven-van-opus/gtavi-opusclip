@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/img/hero.png" alt="Slate, the clip desk mascot: a pixel-art clapperboard holding scissors and a cash stack, standing on a neon sunset with palm trees above the words CLIP DESK" width="430">
+<img src="docs/img/hero.png" alt="The GTA VI logo with two pixel-art buddies peeking over its top edge and tossing cash: a terracotta one in shades with an antenna spark, and a terminal window with a prompt for a face" width="430">
 
 # gtavi-opusclip
 
@@ -218,7 +218,7 @@ Tests: `python3 -m unittest discover -s tests -v` (the OpusClip HTTP layer, yt-d
 
 <details><summary><b>Who made this? Is it official, or affiliated with Rockstar, IShowSpeed or Kai Cenat?</b></summary>
 
-It isn't OpusClip's official plugin (that's `opusclip@opus-skills`), but it isn't independent of OpusClip either: steven-van-opus made it for OpusClip's GTA 6 launch campaign. It's open source and uses OpusClip's public API and MCP server. It is not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed or Kai Cenat. The art is original: no Rockstar logos, key art or game wordmarks.
+It isn't OpusClip's official plugin (that's `opusclip@opus-skills`), but it isn't independent of OpusClip either: steven-van-opus made it for OpusClip's GTA 6 launch campaign. It's open source and uses OpusClip's public API and MCP server. It is not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed or Kai Cenat. The GTA VI logo in the header art is Take-Two Interactive's trademark, shown only to identify the game; the pixel buddies and the rest of the art are original.
 </details>
 
 <details><summary><b>What does it cost?</b></summary>
