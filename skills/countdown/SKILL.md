@@ -14,7 +14,7 @@ and `<structure>`, then run it with the steps under "How to build it".
 Ask me for, in one message:
 1. The streamers and VODs (default: the IShowSpeed and Kai Cenat GTA 6 launch streams) and the angle, picked from: "5 craziest GTA 6 stream moments", "5 times GTA 6 broke <streamer>", "<streamer> vs <streamer>: 5 moments", "5 things GTA 6 NPCs did to streamers".
 2. Where it goes (TikTok, Shorts, Reels) and whether it's for a paid campaign. If it is: #ad first, the platform's paid label on, the campaign's tag and footage rules.
-3. My OpusClip setup: MCP connected or OPUSCLIP_API_KEY exported (both need Pro (Beta), Max or Business), or the web app (ClipAnything needs Starter or up and prompting it needs Pro or up; Free adds a watermark). Before any project, tell me the credit estimate (1 credit = 1 minute of video processed) and wait for my yes.
+3. My OpusClip setup: MCP connected or OPUSCLIP_API_KEY exported (both need Pro (limited API access), Max or Business), or the web app (ClipAnything needs Starter or up and prompting it needs Pro or up; Free adds a watermark). Before any project, tell me the credit estimate (1 credit = 1 minute of video processed) and wait for my yes.
 If I give no VODs, run find-streams and pitch me 3 angles, with the real moments behind each.
 </inputs>
 

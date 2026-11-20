@@ -5,7 +5,7 @@ It follows the documented API ("Clip API" v1.0, https://help.opus.pro/api-refere
 create a clipping project from a URL or an uploaded file, poll it, list the clips with titles and
 scores, download them, and (only when you say so) write social copy, post or schedule them.
 
-  export OPUSCLIP_API_KEY=...      # clip.opus.pro/dashboard -> API Access -> Create key (Pro Beta, Max, Business)
+  export OPUSCLIP_API_KEY=...      # clip.opus.pro/dashboard -> API Access -> Create key (Pro (limited API access), Max, Business)
 
   # see the exact request first (nothing is sent, no key needed):
   python3 -I opusclip_api.py --dry-run create --url "https://www.youtube.com/watch?v=VOD" \\
@@ -427,7 +427,7 @@ class OpusClip:
             return self._dry_answer(method, path)
         if not self.api_key:
             raise UsageError(f'{self.key_env} is not set. Create a key at https://clip.opus.pro/dashboard '
-                             '(API Access -> Create key; API access needs Pro Beta, Max or Business), then '
+                             '(API Access -> Create key; API access needs Pro (limited API access), Max or Business), then '
                              f'export {self.key_env}=... in your shell. Use --dry-run to preview requests without a key.')
         data = json.dumps(body).encode() if body is not None else None
         attempt = 0
@@ -454,7 +454,7 @@ class OpusClip:
                 continue
             if resp.status == 401:
                 raise ApiError(401, payload, f'401 Unauthorized: check {self.key_env} '
-                                             '(API access needs Pro Beta, Max or Business)')
+                                             '(API access needs Pro (limited API access), Max or Business)')
             raise ApiError(resp.status, payload)
 
     def _retry_wait(self, resp, attempt):
@@ -1121,7 +1121,7 @@ def build_parser():
 
     s = sub.add_parser('batch', help='create the projects in a plan.json from plan_jobs.py (spends credits; resumable)')
     s.add_argument('plan')
-    s.add_argument('--max-concurrent', type=int, default=4, help='projects processing at once (Pro Beta/Max limit: 4)')
+    s.add_argument('--max-concurrent', type=int, default=4, help='projects processing at once (Pro/Max limit: 4)')
     s.add_argument('--wait', action='store_true')
     s.add_argument('--interval', type=int, default=30)
     s.add_argument('--timeout', type=int, default=4 * 3600,

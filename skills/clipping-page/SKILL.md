@@ -23,7 +23,7 @@ Work like this: read this whole prompt, ask section 2's questions, build the fol
 1. Page name and handle, and which platforms already exist.
 2. The lane: one main angle, so the page has an identity.
 3. My time zone and when I'm around to approve posts.
-4. OpusClip: MCP connected or API key exported? Which plan? (Prompting needs Pro; the API and MCP tools need Pro (Beta), Max or Business; Free-plan clips are watermarked.)
+4. OpusClip: MCP connected or API key exported? Which plan? (Prompting needs Pro; the API and MCP tools need Pro (limited API access), Max or Business; Free-plan clips are watermarked.)
 5. Posts per day per platform. Suggest TikTok 3, Shorts 2, Reels 2, X 4.
 6. Am I in any clipping campaigns? If so, paste the briefs (tags, footage rules, geography, submission windows).
 7. What always needs my approval? Suggest: every post at first, then only anything flagged.

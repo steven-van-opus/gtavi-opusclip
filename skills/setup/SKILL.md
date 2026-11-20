@@ -23,7 +23,7 @@ For every `XX` line, show the user the `fix:` command and ask before you run an 
 
 ## 2. Connect OpusClip (either way works)
 
-**Inside Claude Code (MCP).** This plugin ships OpusClip's hosted MCP server, `https://mcp.opus.pro/mcp`. Ask the user to run `/mcp`, choose this plugin's `opusclip` server and authenticate. Their browser opens OpusClip's OAuth page and they sign in themselves. Then call the MCP tools `opusclip_whoami` and `opusclip_get_usage` to confirm. Any account can connect and list the tools; calling them needs a Pro (Beta), Max or Business plan.
+**Inside Claude Code (MCP).** This plugin ships OpusClip's hosted MCP server, `https://mcp.opus.pro/mcp`. Ask the user to run `/mcp`, choose this plugin's `opusclip` server and authenticate. Their browser opens OpusClip's OAuth page and they sign in themselves. Then call the MCP tools `opusclip_whoami` and `opusclip_get_usage` to confirm. Any account can connect and list the tools; calling them needs a Pro (limited API access), Max or Business plan.
 
 **From scripts (REST API).** `opusclip_api.py` reads `OPUSCLIP_API_KEY` from the environment. The user creates the key at https://clip.opus.pro/dashboard → API Access → Create key, and exports it in their own shell profile. Never ask them to paste a key into the chat, and never write one into a file in this repo or the project.
 
@@ -56,6 +56,6 @@ mkdir -p gtavi/scans gtavi/cuts gtavi/clips gtavi/posts
 ## 4. Tell the user what it costs
 
 - Scanning runs on their machine, so compute is free.
-- OpusClip charges 1 credit per minute of processed video. Every API project costs at least 10 credits. Pro Beta and Max API accounts get 30 requests a minute, 4 projects processing at once and 15 h (900 credits) a month.
+- OpusClip charges 1 credit per minute of processed video. Every API project costs at least 10 credits. Pro and Max API accounts get 30 requests a minute, 4 projects processing at once and 15 h (900 credits) a month.
 - Free-plan clips carry a watermark, and many campaigns reject watermarked clips.
 - Nothing goes to OpusClip and nothing is posted without the user's explicit yes. This plugin's hook (`hooks/hooks.json`) also asks before `opusclip_api.py` or an OpusClip MCP tool spends credits or publishes. It doesn't cover other tools, such as the official plugin's CLI.

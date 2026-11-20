@@ -2,7 +2,7 @@
 
 **Description** (350 characters max):
 
-> Claude Code plugin that turns GTA 6 streams into ready-to-post 9:16 clips with OpusClip. It scans whole VODs locally (whisper.cpp), picks the moments, and sends them to OpusClip (MCP or API) for clipping, captions and a Virality Score. It also writes hooks and copy, credits the streamer, and schedules posts.
+> Claude Code plugin with a one-paste prompt for turning GTA 6 streams into 9:16 clips. Scan VODs locally with whisper.cpp, review the picks, then use OpusClip through MCP or API for clipping, captions and a Virality Score. Includes hooks, streamer credits, post copy and scheduling tools.
 
 **Website:** `https://www.opus.pro`
 

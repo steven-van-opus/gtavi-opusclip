@@ -34,7 +34,7 @@ GTA 6 just broke the streaming record for a game launch: 7.91M people watching a
 
 **2. Connect OpusClip.** Either way works for links up to 10 h. GTA 6 launch VODs are longer, so their windows are cut locally (`cut_windows.py`) and uploaded: `opusclip_api.py batch` does the upload for you, or use `opusclip_create_upload_link` over MCP.
 
-- **MCP (interactive).** The plugin bundles OpusClip's hosted MCP server, `https://mcp.opus.pro/mcp`. Run `/reload-plugins` (or start a new session), then `/mcp`, pick `plugin:gtavi-opusclip:opusclip` and authenticate; you sign in on OpusClip's own OAuth page in your browser. OpusClip MCP tool calls need a Pro (Beta), Max or Business plan.
+- **MCP (interactive).** The plugin bundles OpusClip's hosted MCP server, `https://mcp.opus.pro/mcp`. Run `/reload-plugins` (or start a new session), then `/mcp`, pick `plugin:gtavi-opusclip:opusclip` and authenticate; you sign in on OpusClip's own OAuth page in your browser. OpusClip MCP tool calls need a Pro (limited API access), Max or Business plan.
 - **REST API (scripts and automation).** Create a key at [clip.opus.pro/dashboard](https://clip.opus.pro/dashboard) → API Access → Create key, then export it in your shell. Never commit it.
 
   ```bash
@@ -83,6 +83,20 @@ python3 -I scripts/opusclip_api.py clips <projectId> --top 10 --plan scans/speed
 python3 -I scripts/opusclip_api.py download <projectId> --top 5 --out clips/ --plan scans/speed/plan.json
 ```
 </details>
+
+### One-paste prompt
+
+After setup, paste this into Claude Code. Replace the bracketed defaults as needed.
+
+```text
+Use /gtavi-opusclip:clip-desk for [a VOD link or streamer, default IShowSpeed] and [8] clips.
+If I gave a name, use /gtavi-opusclip:find-streams to pick their latest finished GTA 6 VOD.
+Run /gtavi-opusclip:vodwatch, then /gtavi-opusclip:pick-moments. Show the time ranges, frame sheets, reasons and estimated credits. Wait for my approval of the picks and cost.
+For approved windows, use /gtavi-opusclip:cut-windows on upload jobs, then /gtavi-opusclip:opusclip-clip. Ask before any additional charge.
+Check each clip and use /gtavi-opusclip:hooks-titles, /gtavi-opusclip:captions-copy and /gtavi-opusclip:clip-rules. Give me the clips, streamer credits and copy for [YouTube Shorts]. Leave posting, scheduling and campaign submissions to me.
+```
+
+You get reviewed clips and platform copy after approving the picks and their credit estimate.
 
 ## How it works
 
@@ -224,7 +238,7 @@ It isn't OpusClip's official plugin (that's `opusclip@opus-skills`). It's open s
 <details><summary><b>What does it cost?</b></summary>
 
 - **Scanning:** runs on your machine ($0 compute).
-- **OpusClip:** 1 credit per minute of processed video, and every API project costs at least 10 credits. Pro is $29/mo, or $14.50/mo billed yearly (US list price, Nov 2026). The API and MCP tool calls need Pro (Beta), Max or Business.
+- **OpusClip:** 1 credit per minute of processed video, and every API project costs at least 10 credits. Pro is $29/mo, or $14.50/mo billed yearly (US list price, Nov 2026). The API and MCP tool calls need Pro (limited API access), Max or Business.
 - **Free plan:** 60 credits a month, but clips are watermarked, and many campaigns reject watermarks.
 - **X:** posting there through OpusClip costs 3 credits per clip per account.
 </details>
@@ -236,7 +250,7 @@ No. Every spend and every post needs your yes, and the bundled hook asks again b
 
 <details><summary><b>Can it clip a stream while it's live?</b></summary>
 
-No. OpusClip's app can't take a live stream; Live Clipping is a private beta in Opus Labs. This plugin works from VODs once they're processed. On YouTube that's 10–30 minutes after short streams and 2–12 hours after long ones.
+No. OpusClip's app can't take a live stream; Live Clipping is available through limited early access in Opus Labs. This plugin works from VODs once they're processed. On YouTube that's 10–30 minutes after short streams and 2–12 hours after long ones.
 </details>
 
 <details><summary><b>Why not just send the whole 24-hour VOD to OpusClip?</b></summary>

@@ -23,7 +23,7 @@ argument-hint: "[streamer or search words]"
 
    It lists each channel's latest YouTube streams and Twitch archives. Kick channels come back as links for the user to open.
 3. Read the `next` line under each result:
-   - **LIVE**: still streaming. OpusClip's app can't take a live stream, so note the channel and come back for the VOD. On YouTube a VOD can take 10 to 30 minutes after a short stream ends, and 2 to 12 hours after a long one, before it imports. OpusClip's Live Clipping is a private beta in Opus Labs; don't promise it.
+   - **LIVE**: still streaming. OpusClip's app can't take a live stream, so note the channel and come back for the VOD. On YouTube a VOD can take 10 to 30 minutes after a short stream ends, and 2 to 12 hours after a long one, before it imports. OpusClip's Live Clipping is available through limited early access in Opus Labs; don't promise it.
    - **VOD ≤10h**: OpusClip can import the link. On anything longer than about an hour, run the `vodwatch` skill first so you only pay for the windows you want.
    - **VOD >10h**: too long for one OpusClip project. Run `vodwatch`, then `cut-windows`.
 4. Show the user a short table with streamer, platform, status, length, views, link and the recommended next step. Rank by:
