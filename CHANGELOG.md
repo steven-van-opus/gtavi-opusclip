@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.0 (2026-11-20)
+
+YouTube now serves the GTA 6 launch VODs as processed files (yt-dlp protocol `https` instead of `http_dash_segments`), and a processed VOD answers every 2-second "fragment" request with the whole file. Downloads are now routed by how YouTube serves each VOD.
+
+- `vodwatch.py` asks yt-dlp for the protocol (`--print protocol`, read-only) before every audio download:
+  - still fragments: `ytfrag.py track`, as before;
+  - processed: yt-dlp `-f 139/ba/w`, then the mono 16 kHz extract. If `ytfrag.py` finds the VOD processed after all, vodwatch asks again and carries on with yt-dlp;
+  - Twitch, Kick and other links: `-f ba/w`, never full-quality video.
+
+  `run.json` (`audio`) and `report.md` (`- Audio:`) say which way the audio came. A run that finds fragments left from before the VOD was processed says they can't be resumed.
+- `ytfrag.py` asks for the protocol before its first request and stops on a processed VOD. A reply over 16 MB (no 2-second fragment is that big) stops the download after one round. Both exit with status 3. `window` now writes `<out>.part` and renames it only when ffmpeg succeeds, like `track`.
+- `cut_windows.py` asks before every cut, and so does `frame_sheet.py`, which cuts through it. Fragments go to `ytfrag.py window`; processed VODs to `yt-dlp --download-sections` with the H.264 + AAC renditions first (`299+140` and down the ladder; `134/133` for frame sheets). On ytfrag's exit 3 the cut goes straight to yt-dlp instead of trying every format.
+- `scan_frags.py` drops a chunk whose transcription finishes after the track was assembled, so no 20 minutes are transcribed twice.
+- Docs: the `vodwatch` and `cut-windows` skills, and the README's How it works and Scripts sections, cover both ways YouTube serves a VOD.
+- Tests: `tests/test_download_routing.py`, offline: a fake `yt-dlp` and `whisper-cli` on PATH, mocked HTTP and a local fragment server.
+
 ## 1.0.0 (2026-11-19)
 
 GTA 6 launch-day release.

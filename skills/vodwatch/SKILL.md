@@ -12,7 +12,7 @@ argument-hint: "<VOD url or YouTube id> [number of clips]"
 - Choose the folder `gtavi/scans/<streamer>-<id>/`.
 - Check the whisper model with `python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/doctor.py"`.
 - Tell the user what to expect:
-  - Only the audio track is downloaded, and it is stored as 32 kbps mono: about 350 MB for a 24-hour stream.
+  - Only the audio track is downloaded, and it is stored as 32 kbps mono: about 350 MB for a 24-hour stream. From a processed YouTube VOD, yt-dlp first fetches format 139 (48 kbps, about 520 MB for 24 h), which is deleted once the 32 kbps track is written.
   - whisper.cpp large-v3-turbo ran at about 29× real time on the Apple Silicon Mac this plugin was built on, so 24 h of audio takes under an hour there. Slower machines can pass `--model` with a smaller model.
 
 ## 2. Run
@@ -22,8 +22,9 @@ python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/vodwatch.py" run "<source>" --clips <N
   --out gtavi/scans/<slug> --credit "<Streamer> (<Platform>)"
 ```
 
-- For a multi-hour VOD, run it in the background. It resumes: finished audio fragments and finished 20-minute transcript chunks are kept.
-- The steps are resolve → audio (ytfrag.py for YouTube post-live VODs, yt-dlp or ffmpeg otherwise) → loudness and transcript (`scan_vod.py`) → ranking (`rank_moments.py`) → frame sheets (`frame_sheet.py`) → OpusClip plan (`plan_jobs.py`) → `report.md`.
+- For a multi-hour VOD, run it in the background. It resumes: finished audio fragments (or yt-dlp's partial download) and finished 20-minute transcript chunks are kept.
+- The steps are resolve → audio → loudness and transcript (`scan_vod.py`) → ranking (`rank_moments.py`) → frame sheets (`frame_sheet.py`) → OpusClip plan (`plan_jobs.py`) → `report.md`.
+- Audio: before every download, vodwatch asks yt-dlp how YouTube serves the VOD (`yt-dlp --print protocol`; nothing is downloaded). Right after a stream it is often `http_dash_segments`: 2-second fragments that `yt-dlp --download-sections` can't cut, so `ytfrag.py track` fetches them. Once YouTube has processed the VOD into whole files (`https`; the launch-day VODs took about a day), every fragment request would return the whole file, so yt-dlp downloads the audio instead (`-f 139/ba/w`). Twitch and Kick go through yt-dlp `-f ba/w`, local files through ffmpeg, and `report.md` says which way the audio came. Frame sheets and cuts make the same check before every window.
 - Faster path: `--captions youtube` ranks on YouTube's auto-captions when they exist and skips whisper. They have no punctuation, so the ranking is a little weaker.
 - If the stream is still live, the script stops. Scan the VOD once it is finished.
 

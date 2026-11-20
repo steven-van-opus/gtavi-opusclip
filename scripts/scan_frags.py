@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Transcribe 20-minute chunks straight from a ytfrag fragment directory while the download is still running.
+Only for YouTube VODs still served as 2-second fragments (the ones `ytfrag.py track` downloads): a processed
+VOD is one file that yt-dlp fetches, so there is nothing to overlap.
 Writes the same transcript.jsonl format as scan_vod.py (chunk = 1200 s = 600 two-second fragments), so
-scan_vod.py can resume from it later. Stops as soon as the assembled track file appears.
+scan_vod.py can resume from it later. Stops as soon as the assembled track file appears; a chunk whose
+transcription finishes after that is dropped (scan_vod.py transcribes it), so no 20 minutes are written twice.
   python3 -I scan_frags.py FRAG_DIR OUT_DIR ASSEMBLED_PATH [--chunks 72] [--model PATH]
 FRAG_DIR is the <out>.raw.frags<format>/ folder that `ytfrag.py track` fills (for example
 speed_audio.m4a.raw.frags139/ for `ytfrag.py track <id> 139 speed_audio.m4a`); --chunks = ceil(VOD seconds / 1200).
@@ -20,6 +23,23 @@ if not MODEL:
     print('no whisper.cpp model found: pass --model PATH or set WHISPER_MODEL'); sys.exit(2)
 os.makedirs(out_dir, exist_ok=True)
 tj = os.path.join(out_dir, 'transcript.jsonl')
+
+
+def marked_done(path):
+    """Chunks with a chunk_done marker, read without rewriting the file (scan_vod.py may be writing it by now)."""
+    got = set()
+    if os.path.exists(path):
+        with open(path, encoding='utf-8', errors='replace') as f:
+            for line in f:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                if d.get('marker') == 'chunk_done':
+                    got.add(d.get('chunk'))
+    return got
+
+
 done = finished_chunks(tj)   # chunks with a chunk_done marker; lines of unfinished chunks are removed
 for i in range(nchunks):
     if i in done:
@@ -54,6 +74,16 @@ for i in range(nchunks):
     base = os.path.join(out_dir, f'_f{i}')
     subprocess.run(['whisper-cli', '-m', MODEL, '-f', wav, '-l', 'en', '-t', '8', '-np', '-oj', '-bs', '1', '-bo', '1',
                     '-of', base], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    if os.path.exists(assembled) or i in marked_done(tj):
+        # The track was assembled while whisper ran, so scan_vod.py may already be on this chunk (or another run
+        # finished it): appending now would put the same 20 minutes in the transcript twice.
+        for p in (wav, base + '.json'):
+            if os.path.exists(p):
+                os.remove(p)
+        if os.path.exists(assembled):
+            print(f'assembled track appeared during chunk {i + 1}; leaving it and the rest to scan_vod.py', flush=True)
+            sys.exit(0)
+        continue
     segs = json.loads(open(base + '.json', 'rb').read().decode('utf-8', 'replace')).get('transcription', [])
     s0 = i * 1200
     lines = [json.dumps({'chunk': i, 'start': round(s0 + sg['offsets']['from'] / 1000, 2),

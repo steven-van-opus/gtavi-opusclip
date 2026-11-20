@@ -13,7 +13,9 @@ spoiler or something you can't post. Claude reads the JPG directly.
   python3 -I frame_sheet.py --moments scan/moments.json --source qSyo5d-dVzA --top 8 --out-dir scan/sheets
 
 Writes sheet.jpg (cols x rows tiles, read left to right, top to bottom) and sheet.json with the
-stream time of every tile.
+stream time of every tile. VOD windows come through cut_windows.py, which asks yt-dlp how YouTube
+serves the VOD before each window: ytfrag.py while it is still 2-second fragments, yt-dlp
+--download-sections (formats 134/133) once YouTube has processed it.
 """
 import argparse
 import json

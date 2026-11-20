@@ -9,7 +9,10 @@
 
 What "run" does (every step resumes if you run it again):
   1. resolve   title, channel, length, live status (yt-dlp --print, never -J on a 24 h VOD)
-  2. audio     the audio track only: ytfrag.py for YouTube post-live VODs, yt-dlp or ffmpeg otherwise
+  2. audio     the audio track only. For YouTube it first asks yt-dlp how the VOD is served (asked again on
+               every run, since YouTube processes a VOD some time after the stream): ytfrag.py while it is
+               still 2-second fragments, yt-dlp -f 139/ba/w once it is processed. Twitch, Kick and other
+               links: yt-dlp -f ba/w (never full-quality video). Local files: ffmpeg. Then mono 16 kHz.
   3. scan      loudness per second + whisper.cpp transcript in 20-minute chunks (scan_vod.py)
   4. rank      every 30 s window scored, best moments picked with reasons and brand-safety flags
   5. sheets    a 360p frame sheet per top moment, to check the picture (frame_sheet.py)
@@ -33,6 +36,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from plan_jobs import source_kind, youtube_id  # noqa: E402
+from ytfrag import EXIT_NOT_FRAGMENTED, FRAGMENTED  # noqa: E402
 
 PY = [sys.executable, '-I']
 
@@ -85,9 +89,39 @@ def resolve(src):
 
 
 def youtube_protocol(vid, fmt='139'):
-    out = subprocess.run(['yt-dlp', '--no-warnings', '-f', fmt, '--print', '%(protocol)s',
-                          f'https://www.youtube.com/watch?v={vid}'], capture_output=True, text=True, timeout=300)
-    return out.stdout.strip().splitlines()[-1] if out.stdout.strip() else None
+    """How YouTube serves the audio a scan downloads: 'http_dash_segments' while the VOD is still 2-second
+    fragments (ytfrag.py), 'https' once YouTube has processed it into whole files (yt-dlp). Read-only
+    (yt-dlp --print). Asked before every audio download: an answer from an earlier run can be stale."""
+    url = f'https://www.youtube.com/watch?v={vid}'
+    try:
+        out = subprocess.run(['yt-dlp', '--no-warnings', '--no-playlist', '--skip-download', '-f', f'{fmt}/ba',
+                              '--print', 'protocol', url], capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        raise SystemExit(f'yt-dlp did not say how {url} is served within 300 s; run the same command again')
+    lines = out.stdout.strip().splitlines()
+    if out.returncode != 0 or not lines:
+        err = (out.stderr.strip().splitlines() or ['no output'])[-1]
+        raise SystemExit(f'yt-dlp could not read the audio formats of {url}: {err}')
+    return lines[-1].strip()
+
+
+def audio_selector(meta, fmt='139'):
+    """yt-dlp -f for the scan's audio: the audio-only format when the site has one, else the smallest full
+    rendition, never full-quality video. On YouTube, format `fmt` (139 = AAC 48k) comes first."""
+    return f'{fmt}/ba/w' if meta['kind'] == 'youtube' else 'ba/w'
+
+
+def audio_line(info):
+    """How the audio track was fetched, for report.md (None when this folder has no record of it)."""
+    via = (info or {}).get('via')
+    if via == 'ytfrag.py':
+        return f'ytfrag.py track {info.get("format")} (YouTube still served the VOD as 2-second fragments)'
+    if via == 'yt-dlp':
+        p = info.get('protocol')
+        return f'yt-dlp -f {info.get("format")}' + (f' (processed YouTube VOD, protocol {p})' if p else '')
+    if via == 'ffmpeg':
+        return 'ffmpeg (local file)'
+    return None
 
 
 def to_compact_audio(src, dest):
@@ -105,20 +139,49 @@ def to_compact_audio(src, dest):
     return dest
 
 
-def get_audio(meta, out, jobs=16, fmt='139'):
+def get_audio(meta, out, jobs=16, fmt='139', info=None):
+    """OUT/audio.m4a, the mono 16 kHz track the scan reads. `info` (run.json's "audio") records how it was fetched.
+    A YouTube VOD's protocol is asked right here, before the download, every time this has to download."""
+    info = {} if info is None else info
     dest = os.path.join(out, 'audio.m4a')
     if os.path.exists(dest) and os.path.getsize(dest) > 0:
         print(f'audio exists: {dest}', file=sys.stderr)
         return dest
     if meta['kind'] == 'file':
+        info.clear()
+        info.update(via='ffmpeg')
         return to_compact_audio(meta['url'], dest)
-    if meta['kind'] == 'youtube' and youtube_protocol(meta['id'], fmt) == 'http_dash_segments':
-        # ytfrag.py assembles into audio.m4a.part and renames it only when it is complete
-        sh(PY + [os.path.join(HERE, 'ytfrag.py'), 'track', meta['id'], fmt, dest, '--jobs', str(jobs)])
-        return dest
+    sel = audio_selector(meta, fmt)
+    info.clear()
+    if meta['kind'] == 'youtube':
+        proto = youtube_protocol(meta['id'], fmt)
+        if proto == FRAGMENTED:
+            print(f'{meta["id"]}: still served as 2-second fragments: ytfrag.py track {fmt}', file=sys.stderr)
+            info.update(protocol=proto, via='ytfrag.py', format=fmt)
+            # ytfrag.py assembles into audio.m4a.part and renames it only when it is complete. It asks yt-dlp for
+            # the protocol once more before its first request and stops (exit 3) if the VOD was processed since.
+            try:
+                sh(PY + [os.path.join(HERE, 'ytfrag.py'), 'track', meta['id'], fmt, dest, '--jobs', str(jobs)])
+                return dest
+            except subprocess.CalledProcessError as e:
+                if e.returncode != EXIT_NOT_FRAGMENTED:
+                    raise
+            proto = youtube_protocol(meta['id'], fmt)   # processed in the meantime: ask again, then yt-dlp
+            if proto == FRAGMENTED:
+                raise SystemExit(f'ytfrag.py got a whole file for a fragment of {meta["id"]}, but yt-dlp still says '
+                                 f'{FRAGMENTED}: YouTube is switching this VOD over; run the same command again later')
+            info.clear()
+        info['protocol'] = proto
+        print(f'{meta["id"]}: processed VOD (protocol {proto}): yt-dlp -f {sel}', file=sys.stderr)
+        stale = os.path.abspath(dest + '.raw') + f'.frags{fmt}'
+        if os.path.isdir(stale):
+            print(f'note: {stale} holds fragments from a run made while the VOD was still served as fragments; '
+                  'they cannot be resumed now, so delete that folder to free the space', file=sys.stderr)
+    info.update(via='yt-dlp', format=sel)
     raw = os.path.join(out, 'audio_src')
-    sh(['yt-dlp', '--no-warnings', '--no-playlist', '-f', 'bestaudio/best', '-o', raw + '.%(ext)s', meta['url']])
-    got = sorted(f for f in os.listdir(out) if f.startswith('audio_src.') and not f.endswith(('.part', '.ytdl')))
+    sh(['yt-dlp', '--no-warnings', '--no-playlist', '-f', sel, '-o', raw + '.%(ext)s', meta['url']])
+    got = sorted(f for f in os.listdir(out) if f.startswith('audio_src.')
+                 and not f.endswith(('.part', '.ytdl')) and '.part-Frag' not in f)
     if not got:
         raise SystemExit('yt-dlp downloaded nothing')
     src = os.path.join(out, got[0])
@@ -155,7 +218,7 @@ def cmd_run(a):
     transcript = None
     if a.captions == 'youtube' and meta['kind'] == 'youtube':
         transcript = stage(run, out, 'captions', lambda: youtube_captions(meta, out))
-    audio = stage(run, out, 'audio', lambda: get_audio(meta, out, a.jobs, a.audio_format))
+    audio = stage(run, out, 'audio', lambda: get_audio(meta, out, a.jobs, a.audio_format, run.setdefault('audio', {})))
     scan = PY + [os.path.join(HERE, 'scan_vod.py'), audio, out, '--chunk', str(a.chunk), '--threads', str(a.threads)]
     if a.model:
         scan += ['--model', a.model]
@@ -224,6 +287,9 @@ def write_report(out, run):
              f'- Wall time: {hms(run.get("wall_seconds", 0))} total; ' + ', '.join(
                  f'{k} {hms(v["seconds"])}' for k, v in run.get('stages', {}).items()),
              '- Compute cost: $0 (whisper.cpp, ffmpeg and the ranking ran on this machine; no API was called)', '']
+    au = audio_line(run.get('audio'))
+    if au:
+        lines.insert(4, f'- Audio: {au}')   # right after the credit line
     if plan:
         t = plan['totals']
         lines += [f'## OpusClip plan (not sent)', '',
@@ -281,7 +347,8 @@ def main(argv=None):
     r.add_argument('--model', help='whisper.cpp model path (default: $WHISPER_MODEL or ~/.cache/whisper.cpp)')
     r.add_argument('--threads', type=int, default=8)
     r.add_argument('--chunk', type=int, default=1200)
-    r.add_argument('--jobs', type=int, default=16, help='parallel fragment downloads (YouTube post-live VODs)')
+    r.add_argument('--jobs', type=int, default=16,
+                   help='parallel fragment downloads (YouTube VODs still served as 2-second fragments)')
     r.add_argument('--audio-format', default='139', help='YouTube audio format id (139 = 48k AAC)')
     r.add_argument('--sheets', type=int, default=8, help='frame sheets for the top N moments (0 = skip)')
     r.add_argument('--prompt', help='ClipAnything prompt for the plan')

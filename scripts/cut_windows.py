@@ -7,11 +7,16 @@
   python3 -I cut_windows.py --plan plan.json
 
 How each source is cut:
-  YouTube post-live VODs   ytfrag.py window (the VOD is served as 2-second fragments, which breaks
-                           yt-dlp --download-sections; ytfrag fetches only the fragments it needs)
-  other YouTube, Twitch,   yt-dlp --download-sections "*START-END" --force-keyframes-at-cuts
-  Kick and other links
-  local files              ffmpeg -ss/-to, re-encoded so the cut is frame-exact
+  YouTube VOD still served  ytfrag.py window (right after a stream YouTube often serves the VOD as
+  as 2-second fragments     2-second fragments, which breaks yt-dlp --download-sections; ytfrag fetches
+                            only the fragments it needs)
+  processed YouTube VOD,    yt-dlp --download-sections "*START-END" --force-keyframes-at-cuts (YouTube:
+  Twitch, Kick, other links the same H.264 + AAC renditions ytfrag.py would use first, e.g. 299+140)
+  local files               ffmpeg -ss/-to, re-encoded so the cut is frame-exact
+For YouTube the route is decided again before every cut, from yt-dlp --print protocol
+(http_dash_segments = fragments, https = processed): YouTube processes a VOD into whole files some time
+after the stream, and from then on answers every fragment request with the whole file. ytfrag.py checks
+once more before its first request; if it finds the VOD processed (exit 3), the cut goes to yt-dlp.
 Then the frame rate is checked: OpusClip local uploads need an integer frame rate, so a 59.94 or
 29.97 fps cut is re-encoded to 60 or 30 fps.
 """
@@ -25,8 +30,13 @@ import sys
 import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+from ytfrag import EXIT_NOT_FRAGMENTED, FRAGMENTED  # noqa: E402
+
 YTFRAG = os.path.join(HERE, 'ytfrag.py')
 VIDEO_LADDER = {1080: ['299', '137', '298', '136'], 720: ['298', '136', '135'], 480: ['135', '134'], 360: ['134', '133']}
+AUDIO_FORMAT = '140'  # YouTube AAC 128k: the audio ytfrag.py muxes into a window, and yt-dlp's first choice too
 
 
 def parse_time(v):
@@ -91,40 +101,61 @@ def normalize_fps(path):
 
 
 def yt_protocol(vid, fmt):
+    """yt-dlp's delivery protocol for one YouTube format ('http_dash_segments' while the VOD is still served as
+    2-second fragments, 'https' once processed), or None when yt-dlp can't read that format (it may not exist
+    for this VOD). Read-only (yt-dlp --print), and asked again for every cut."""
     try:
-        out = subprocess.run(['yt-dlp', '--no-warnings', '-f', fmt, '--print', '%(protocol)s',
-                              f'https://www.youtube.com/watch?v={vid}'], capture_output=True, text=True, timeout=120)
-        return out.stdout.strip().splitlines()[-1] if out.stdout.strip() else None
+        out = subprocess.run(['yt-dlp', '--no-warnings', '--no-playlist', '--skip-download', '-f', fmt,
+                              '--print', 'protocol', f'https://www.youtube.com/watch?v={vid}'],
+                             capture_output=True, text=True, timeout=120)
+        lines = out.stdout.strip().splitlines()
+        return lines[-1].strip() if out.returncode == 0 and lines else None
     except Exception:
         return None
 
 
 def cut_youtube(vid, start, end, out, height=1080, audio=True, method='auto'):
+    """ytfrag.py while YouTube still serves the VOD as 2-second fragments, yt-dlp once it is processed."""
     ladder = VIDEO_LADDER.get(height, VIDEO_LADDER[1080])
     if method in ('auto', 'ytfrag'):
         for fmt in ladder:
-            proto = yt_protocol(vid, fmt) if method == 'auto' else 'http_dash_segments'
+            proto = yt_protocol(vid, fmt) if method == 'auto' else FRAGMENTED
             if proto is None:
-                continue
-            if proto != 'http_dash_segments':
-                break   # a normal (non-fragmented) VOD: yt-dlp can cut it directly
+                continue    # no such rendition for this VOD: try the next one
+            if proto != FRAGMENTED:
+                print(f'{vid}: processed VOD (protocol {proto}): cutting with yt-dlp --download-sections', file=sys.stderr)
+                break
             cmd = [sys.executable, '-I', YTFRAG, 'window', vid, str(start), str(end), out, '--video', fmt,
-                   '--audio', '140' if audio else 'none']
+                   '--audio', AUDIO_FORMAT if audio else 'none']
             try:
                 run(cmd)
                 return 'ytfrag', fmt
-            except subprocess.CalledProcessError:
+            except subprocess.CalledProcessError as e:
+                if e.returncode == EXIT_NOT_FRAGMENTED:   # processed since the check: every format is, so stop here
+                    print(f'{vid}: ytfrag.py found a processed VOD: cutting with yt-dlp --download-sections',
+                          file=sys.stderr)
+                    break
                 continue
-    return cut_ytdlp(f'https://www.youtube.com/watch?v={vid}', start, end, out, height, audio), None
+    return cut_ytdlp(f'https://www.youtube.com/watch?v={vid}', start, end, out, height, audio, ladder), None
 
 
-def cut_ytdlp(url, start, end, out, height=1080, audio=True):
-    fmt = f'bv*[height<={height}]+ba/b[height<={height}]' if audio else f'bv*[height<={height}]/b[height<={height}]'
+def ytdlp_format(height=1080, audio=True, ladder=None):
+    """yt-dlp -f for a window. With a YouTube ladder, its H.264 renditions (with AAC 140) come first, the files
+    ytfrag.py would have fetched; then any rendition up to `height`."""
+    any_fmt = f'bv*[height<={height}]+ba/b[height<={height}]' if audio else f'bv*[height<={height}]/b[height<={height}]'
+    if not ladder:
+        return any_fmt
+    return '/'.join([f'{v}+{AUDIO_FORMAT}' if audio else v for v in ladder] + [any_fmt])
+
+
+def cut_ytdlp(url, start, end, out, height=1080, audio=True, ladder=None):
+    fmt = ytdlp_format(height, audio, ladder)
     base = os.path.splitext(out)[0]
     run(['yt-dlp', '--no-warnings', '--no-playlist', '-f', fmt, '--download-sections', f'*{start:.2f}-{end:.2f}',
          '--force-keyframes-at-cuts', '--merge-output-format', 'mp4', '-o', base + '.%(ext)s', url])
     if not os.path.exists(out):
-        cands = [p for p in os.listdir(os.path.dirname(os.path.abspath(out))) if p.startswith(os.path.basename(base) + '.')]
+        cands = [p for p in os.listdir(os.path.dirname(os.path.abspath(out))) if p.startswith(os.path.basename(base) + '.')
+                 and not p.endswith(('.part', '.ytdl')) and '.part-Frag' not in p]
         if not cands:
             raise SystemExit(f'yt-dlp produced no file for {url}')
         os.replace(os.path.join(os.path.dirname(os.path.abspath(out)), cands[0]), out)
@@ -148,7 +179,9 @@ def cut(source, start, end, out, height=1080, audio=True, method='auto', fix_fps
     elif youtube_id(source) and method != 'ytdlp':
         how, _ = cut_youtube(youtube_id(source), start, end, out, height, audio, method)
     else:
-        how = cut_ytdlp(source if '://' in source else f'https://www.youtube.com/watch?v={source}', start, end, out, height, audio)
+        ladder = VIDEO_LADDER.get(height, VIDEO_LADDER[1080]) if youtube_id(source) else None
+        how = cut_ytdlp(source if '://' in source else f'https://www.youtube.com/watch?v={source}', start, end, out,
+                        height, audio, ladder)
     fps = normalize_fps(out) if fix_fps and shutil.which('ffprobe') else probe_fps(out)
     return {'file': out, 'method': how, 'fps': fps, 'start': start, 'end': end}
 
@@ -164,7 +197,8 @@ def main(argv=None):
     ap.add_argument('--height', type=int, default=1080, choices=sorted(VIDEO_LADDER))
     ap.add_argument('--no-audio', action='store_true')
     ap.add_argument('--method', default='auto', choices=('auto', 'ytfrag', 'ytdlp'),
-                    help='force the YouTube method (auto checks whether the VOD is served as fragments)')
+                    help='force the YouTube method (auto asks yt-dlp before every cut whether the VOD is still served '
+                         'as 2-second fragments; ytfrag.py refuses a processed VOD, which then goes to yt-dlp)')
     ap.add_argument('--keep-fps', action='store_true', help='do not normalize fractional frame rates')
     a = ap.parse_args(argv)
     for tool in ('ffmpeg', 'ffprobe'):

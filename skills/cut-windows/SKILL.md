@@ -1,6 +1,6 @@
 ---
 name: cut-windows
-description: Cut exact time windows out of a stream VOD or a local file, ready to upload to OpusClip. Uses ytfrag.py for YouTube post-live VODs that yt-dlp can't cut, yt-dlp for Twitch, Kick and other links, and ffmpeg for local files, then normalizes the frame rate for upload. Use when a source is over OpusClip's 10-hour limit, is a Kick link, or the user wants frame-exact in and out points.
+description: Cut exact time windows out of a stream VOD or a local file, ready to upload to OpusClip. Uses ytfrag.py while a YouTube VOD is still served as 2-second fragments (which yt-dlp can't cut), yt-dlp once YouTube has processed it and for Twitch, Kick and other links, and ffmpeg for local files, then normalizes the frame rate for upload. Use when a source is over OpusClip's 10-hour limit, is a Kick link, or the user wants frame-exact in and out points.
 argument-hint: "[plan.json | source start end]"
 ---
 
@@ -35,9 +35,11 @@ python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/cut_windows.py" --source <youtube id |
 
 | Source | Method |
 |---|---|
-| YouTube post-live VOD (served as 2-second fragments; `yt-dlp --download-sections` fails on these) | `ytfrag.py window`. It fetches only the fragments it needs, rotates throttled signed URLs and retries. |
-| other YouTube, Twitch, Kick and other links | `yt-dlp --download-sections "*start-end" --force-keyframes-at-cuts` |
+| YouTube VOD still served as 2-second fragments (protocol `http_dash_segments`, usual right after a stream; `yt-dlp --download-sections` fails on these) | `ytfrag.py window`. It fetches only the fragments it needs, rotates throttled signed URLs and retries. |
+| processed YouTube VOD (protocol `https`), Twitch, Kick and other links | `yt-dlp --download-sections "*start-end" --force-keyframes-at-cuts`. For YouTube the H.264 + AAC renditions come first (`299+140`, then `137+140`, and so on). |
 | local file | `ffmpeg -ss/-to`, re-encoded so the cut is frame-exact |
+
+For YouTube the script asks yt-dlp for the protocol before every cut (`yt-dlp --print protocol`, nothing downloaded). YouTube processes a VOD into whole files some time after the stream (the launch-day VODs took about a day), and from then on it answers every fragment request with the entire file. `ytfrag.py` checks again before its first request and exits with status 3 on a processed VOD, or after a reply over 16 MB; the cut then goes to yt-dlp.
 
 After every cut, the script checks the frame rate. OpusClip local uploads need an integer frame rate, so 59.94 or 29.97 fps is re-encoded to 60 or 30.
 

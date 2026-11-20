@@ -95,7 +95,7 @@ python3 -I scripts/opusclip_api.py download <projectId> --top 5 --out clips/ --p
    - reaction words ("no way", "oh my god", screams, laughter),
    - talking speed.
 
-   Your machine does the work, so compute is free. YouTube post-live VODs are served as 2-second fragments that `yt-dlp --download-sections` can't cut; `ytfrag.py` fetches them directly, rotating throttled URLs and resuming.
+   Your machine does the work, so compute is free. Before every download it asks yt-dlp how YouTube serves the VOD. Right after a stream that is often 2-second fragments that `yt-dlp --download-sections` can't cut, so `ytfrag.py` fetches them directly, rotating throttled URLs and resuming. Once YouTube has processed the VOD into whole files (the launch-day VODs took about a day), yt-dlp downloads the audio and cuts the windows itself.
 3. **Pick and verify.** `pick-moments` puts a frame sheet of each candidate in front of Claude and scores it on hook, payoff, reaction, readability and novelty. Slurs, sexual content, spoilers and leaks are hard skips; profanity gets bleeped.
 4. **Clip with OpusClip.** Each picked window becomes an OpusClip project using these settings:
    - ClipAnything, genre Gaming;
@@ -195,13 +195,13 @@ All Python is stdlib-only and runs with `python3 -I`. Every script has `--help`.
 |---|---|
 | `opusclip_api.py` | OpusClip REST client: create (URL, uploadId or file via 4-step V2 upload), status/wait, clips and download (with `--plan`, in stream time), transcript, censor, social copy, post, schedule. `--dry-run` prints the exact requests; spending and publishing need `--yes`. |
 | `vodwatch.py` | One command for the whole-VOD scan: resolve, audio, scan, rank, frame sheets, OpusClip plan, report. Resumable. |
-| `ytfrag.py` | Exact windows or whole audio tracks from YouTube post-live VODs served as 2-second fragments; rotates throttled URLs, retries and resumes. |
+| `ytfrag.py` | Exact windows or whole audio tracks from YouTube VODs still served as 2-second fragments; rotates throttled URLs, retries and resumes. Stops before its first request on a processed VOD (yt-dlp takes those). |
 | `scan_vod.py` | Loudness per second and a chunked whisper.cpp transcript of a full audio track, with coarse 30 s ranking. |
-| `scan_frags.py` | Transcribes chunks while `ytfrag.py track` is still downloading. |
+| `scan_frags.py` | Transcribes chunks while `ytfrag.py track` is still downloading (VODs still served as fragments). |
 | `rank_moments.py` | Scores every window (local loudness, jumps, rarity-weighted reaction cues, speech rate, music and loop penalties), picks moments with reasons and brand-safety flags, and measures recall with `--eval`. |
 | `frame_sheet.py` | A 4x3 contact sheet of any window (fetches 360p, no audio, then deletes it) for Claude to check visually. |
 | `plan_jobs.py` | Moments to OpusClip jobs: padding, merging, the 10 h routing, a credit estimate. Sends nothing. |
-| `cut_windows.py` | Cuts windows with ytfrag, yt-dlp or ffmpeg and normalizes fractional frame rates for upload. |
+| `cut_windows.py` | Cuts windows with ytfrag (VODs still served as fragments), yt-dlp (processed VODs and other links) or ffmpeg, checking which before every cut, and normalizes fractional frame rates for upload. |
 | `find_streams.py` | yt-dlp flat search and watchlists (YouTube streams tabs, Twitch archives, Kick links). Read-only. |
 | `copy_kit.py` | Per-platform captions with the credit line, #ad, campaign tags, length limits and risky-wording warnings. |
 | `post_calendar.py` | A posting calendar CSV across platforms and time zones, within OpusClip's scheduler limits. |
@@ -212,7 +212,7 @@ All Python is stdlib-only and runs with `python3 -I`. Every script has `--help`.
 | `doctor.py` | Toolchain check; never prints secrets. |
 | `render.mjs` | HTML to PNG (title cards, countdown headers, this README's art) using your installed Chrome. |
 
-Tests: `python3 -m unittest discover -s tests -v` (the OpusClip HTTP layer is mocked; no network, no credits).
+Tests: `python3 -m unittest discover -s tests -v` (the OpusClip HTTP layer, yt-dlp and YouTube's fragment server are mocked; no network, no credits).
 
 ## FAQ
 
