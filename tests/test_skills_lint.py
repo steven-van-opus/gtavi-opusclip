@@ -52,6 +52,8 @@ class TestSkills(unittest.TestCase):
         plugin = json.loads(read(os.path.join(ROOT, '.claude-plugin', 'plugin.json')))
         market = json.loads(read(os.path.join(ROOT, '.claude-plugin', 'marketplace.json')))
         self.assertEqual(plugin['name'], 'gtavi-opusclip')
+        self.assertTrue(os.path.isfile(os.path.join(ROOT, plugin['icon'])), 'plugin.json icon must point at a file')
+        self.assertNotRegex(plugin['description'], r'IShowSpeed|Kai Cenat', 'no streamer names in listing copy')
         self.assertEqual(market['plugins'][0]['name'], plugin['name'])
         self.assertEqual(market['plugins'][0]['source'], './')
         mcp = json.loads(read(os.path.join(ROOT, '.mcp.json')))

@@ -17,7 +17,9 @@ What "run" does (every step resumes if you run it again):
                to 10 h, local cut + upload for longer ones. Nothing is sent to OpusClip.
   7. report    report.md: hours scanned, moments found, wall time per step, cost of compute ($0, local)
 Then: review moments.md + sheets/, and send the plan with opusclip_api.py batch plan.json --yes
-(or the OpusClip MCP tool opusclip_submit_project with the same URL and range).
+(it uploads the local cuts of "upload" jobs itself), or over MCP: opusclip_submit_project with the
+job's URL and range for "url" jobs, and opusclip_create_upload_link plus opusclip_submit_project with
+the upload id for "upload" jobs (cut them first with cut_windows.py --plan plan.json).
 """
 import argparse
 import json
@@ -88,26 +90,40 @@ def youtube_protocol(vid, fmt='139'):
     return out.stdout.strip().splitlines()[-1] if out.stdout.strip() else None
 
 
+def to_compact_audio(src, dest):
+    """src -> mono 16 kHz AAC at 32 kbps. ffmpeg writes dest.part, which becomes dest only when ffmpeg
+    succeeds, so an interrupted run never leaves a short audio.m4a that the next run would accept."""
+    part = dest + '.part'
+    try:
+        sh(['ffmpeg', '-loglevel', 'error', '-y', '-i', src, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'aac',
+            '-b:a', '32k', '-f', 'ipod', part])
+    except BaseException:
+        if os.path.exists(part):
+            os.remove(part)
+        raise
+    os.replace(part, dest)
+    return dest
+
+
 def get_audio(meta, out, jobs=16, fmt='139'):
     dest = os.path.join(out, 'audio.m4a')
     if os.path.exists(dest) and os.path.getsize(dest) > 0:
         print(f'audio exists: {dest}', file=sys.stderr)
         return dest
     if meta['kind'] == 'file':
-        sh(['ffmpeg', '-loglevel', 'error', '-y', '-i', meta['url'], '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'aac',
-            '-b:a', '32k', dest])
-        return dest
+        return to_compact_audio(meta['url'], dest)
     if meta['kind'] == 'youtube' and youtube_protocol(meta['id'], fmt) == 'http_dash_segments':
+        # ytfrag.py assembles into audio.m4a.part and renames it only when it is complete
         sh(PY + [os.path.join(HERE, 'ytfrag.py'), 'track', meta['id'], fmt, dest, '--jobs', str(jobs)])
         return dest
     raw = os.path.join(out, 'audio_src')
     sh(['yt-dlp', '--no-warnings', '--no-playlist', '-f', 'bestaudio/best', '-o', raw + '.%(ext)s', meta['url']])
-    got = [f for f in os.listdir(out) if f.startswith('audio_src.')]
+    got = sorted(f for f in os.listdir(out) if f.startswith('audio_src.') and not f.endswith(('.part', '.ytdl')))
     if not got:
         raise SystemExit('yt-dlp downloaded nothing')
     src = os.path.join(out, got[0])
-    sh(['ffmpeg', '-loglevel', 'error', '-y', '-i', src, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'aac', '-b:a', '32k', dest])
-    os.remove(src)
+    to_compact_audio(src, dest)
+    os.remove(src)          # only after the compact track is complete
     return dest
 
 

@@ -42,8 +42,8 @@ For long VODs, run it in the background and report progress from `report.md` and
 1. If any job routes `upload`, run `cut-windows` (`cut_windows.py --plan`).
 2. Run `opusclip-clip`:
    - dry run first;
-   - then `batch --yes --wait`, or the MCP `opusclip_submit_project` per window;
-   - then `clips`, `download` to `gtavi/clips/<projectId>/`, and bleep where needed.
+   - then `batch --yes --wait`, or over MCP `opusclip_submit_project` per `url` job (`upload` jobs go through `opusclip_create_upload_link` first; see `opusclip-clip`);
+   - then `clips`, `download --plan` to `gtavi/clips/<projectId>/` (clip times in the stream), and bleep where needed.
 3. Frame-check every downloaded clip (`frame_sheet.py --video`).
 
 ## 5. Package: checkpoint 2

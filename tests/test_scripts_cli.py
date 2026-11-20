@@ -68,22 +68,42 @@ class TestOfflineCommands(unittest.TestCase):
         self.assertNotIn('sk-should-never-print', r.stdout + r.stderr)
 
     def test_guard_asks_for_publishing_and_spending(self):
+        def bash(cmd):
+            return {'tool_name': 'Bash', 'tool_input': {'command': cmd}}
         ask = [
             {'tool_name': 'mcp__plugin_gtavi-opusclip_opusclip__opusclip_create_post_task', 'tool_input': {'clipId': 'C'}},
             {'tool_name': 'mcp__opusclip__opusclip_schedule_publish', 'tool_input': {}},
             {'tool_name': 'mcp__plugin_opusclip_opusclip__opusclip_submit_project', 'tool_input': {'videoUrl': 'U'}},
-            {'tool_name': 'Bash', 'tool_input': {'command': 'python3 -I scripts/opusclip_api.py batch plan.json --yes'}},
-            {'tool_name': 'Bash', 'tool_input': {'command': 'python3 -I opusclip_api.py post P C --account a --title t --yes'}},
+            # tools that aren't on the documented read-only list ask too (media generation names aren't documented)
+            {'tool_name': 'mcp__opusclip__opusclip_generate_music', 'tool_input': {}},
+            {'tool_name': 'mcp__opusclip__opusclip_create_upload_link', 'tool_input': {}},
+            bash('python3 -I scripts/opusclip_api.py batch plan.json --yes'),
+            bash('python3 -I opusclip_api.py post P C --account a --title t --yes'),
+            # a dry run chained in front of a real run must not hide the real run
+            bash('python3 -I scripts/opusclip_api.py --dry-run batch plan.json && '
+                 'python3 -I scripts/opusclip_api.py batch plan.json --yes --wait'),
+            bash('python3 -I scripts/opusclip_api.py --dry-run batch p.json; python3 -I scripts/opusclip_api.py censor P C --yes'),
+            # a --dry-run in a comment, or after the subcommand, doesn't count
+            bash('python3 -I scripts/opusclip_api.py batch plan.json --yes --wait # --dry-run'),
+            bash('python3 -I scripts/opusclip_api.py batch plan.json --yes --dry-run'),
+            bash('python3 -I "$S/opusclip_api.py" --json --org-id org_1 \\\n  schedule P C --account a --title t --at x --yes'),
+            bash("bash -c 'python3 opusclip_api.py --dry-run batch p; python3 opusclip_api.py batch p --yes'"),
         ]
         quiet = [
             {'tool_name': 'mcp__opusclip__opusclip_list_clips', 'tool_input': {}},
-            {'tool_name': 'Bash', 'tool_input': {'command': 'python3 -I scripts/opusclip_api.py --dry-run batch plan.json'}},
-            {'tool_name': 'Bash', 'tool_input': {'command': 'python3 -I scripts/opusclip_api.py clips P1'}},
-            {'tool_name': 'Bash', 'tool_input': {'command': 'ls -la'}},
+            {'tool_name': 'mcp__plugin_gtavi-opusclip_opusclip__opusclip_analyze_video', 'tool_input': {}},
+            bash('python3 -I scripts/opusclip_api.py --dry-run batch plan.json'),
+            bash('python3 -I scripts/opusclip_api.py --dry-run batch plan.json   # next: opusclip_api.py batch --yes'),
+            bash('python3 -I scripts/opusclip_api.py clips P1'),
+            bash('python3 -I scripts/opusclip_api.py censor-status JOB1'),   # read-only, not "censor"
+            bash('python3 -I scripts/opusclip_api.py download P1 --out clips/post'),
+            bash('# python3 -I scripts/opusclip_api.py batch plan.json --yes\nls'),
+            bash('ls -la'),
             {'tool_name': 'Read', 'tool_input': {'file_path': 'x'}},
         ]
         for ev in ask:
             r = run('guard.py', stdin=json.dumps(ev))
+            self.assertTrue(r.stdout.strip(), ev)
             out = json.loads(r.stdout)['hookSpecificOutput']
             self.assertEqual(out['permissionDecision'], 'ask', ev)
             self.assertEqual(out['hookEventName'], 'PreToolUse')
@@ -91,6 +111,18 @@ class TestOfflineCommands(unittest.TestCase):
             r = run('guard.py', stdin=json.dumps(ev))
             self.assertEqual(r.stdout.strip(), '', ev)
             self.assertEqual(r.returncode, 0)
+        r = run('guard.py', stdin=json.dumps(bash('python3 -I scripts/opusclip_api.py censor-status J')))
+        self.assertNotIn('spends', r.stdout)
+
+    def test_guard_knows_every_opusclip_api_subcommand(self):
+        sys.path.insert(0, SCRIPTS)
+        try:
+            import guard
+            import opusclip_api
+        finally:
+            sys.path.remove(SCRIPTS)
+        sub = next(a for a in opusclip_api.build_parser()._actions if a.__class__.__name__ == '_SubParsersAction')
+        self.assertEqual(set(sub.choices), guard.SUBCOMMANDS)
 
     def test_copy_kit_rules(self):
         r = run('copy_kit.py', '--hook', 'IShowSpeed tried to hug the Red Hulk', '--streamer', 'IShowSpeed',
@@ -110,6 +142,22 @@ class TestOfflineCommands(unittest.TestCase):
         self.assertTrue(any('earnings' in w for w in tik['warnings']))
         long = run('copy_kit.py', '--hook', 'x' * 300, '--streamer', 'S', '--json')
         self.assertTrue(any('280' in w for w in json.loads(long.stdout)['posts']['x']['warnings']))
+
+    def test_copy_kit_paid_post_passes_its_own_checks(self):
+        # Shorts puts #ad first in the description (the title is the hook); that must not be flagged
+        for extra in ([], ['--extra', 'his first time in Vice City']):
+            r = run('copy_kit.py', '--hook', 'x', '--streamer', 'y', '--paid', *extra)
+            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertNotIn('#ad must come first', r.stdout)
+            j = run('copy_kit.py', '--hook', 'x', '--streamer', 'y', '--paid', *extra, '--json')
+            self.assertEqual(j.returncode, 0)
+            shorts = json.loads(j.stdout)['posts']['shorts']
+            self.assertTrue(shorts['text']['description'].startswith('#ad'))
+            self.assertEqual(shorts['warnings'], [])
+        # --json and text mode give the same exit code when there are warnings
+        bad = ('--hook', 'OFFICIAL clip', '--streamer', 'y')
+        self.assertEqual(run('copy_kit.py', *bad).returncode, 1)
+        self.assertEqual(run('copy_kit.py', *bad, '--json').returncode, 1)
 
     def test_post_calendar(self):
         with tempfile.TemporaryDirectory() as d:
@@ -212,6 +260,62 @@ class TestMedia(unittest.TestCase):
             dur = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', out],
                                        capture_output=True, text=True).stdout)
             self.assertAlmostEqual(dur, 4.0, delta=0.25)
+
+    def test_track_assembly_is_all_or_nothing(self):
+        sys.path.insert(0, SCRIPTS)
+        try:
+            import ytfrag
+        finally:
+            sys.path.remove(SCRIPTS)
+        with tempfile.TemporaryDirectory() as d:
+            src = os.path.join(d, 'src.mp4')            # a fragmented MP4 audio track, like YouTube's 2 s fragments
+            subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=6',
+                            '-c:a', 'aac', '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', src], check=True)
+            data = open(src, 'rb').read()
+            good, bad = os.path.join(d, 'good.frags139'), os.path.join(d, 'bad.frags139')
+            os.makedirs(good)
+            os.makedirs(bad)
+            third = len(data) // 3
+            for i, piece in enumerate((data[:third], data[third:2 * third], data[2 * third:])):
+                with open(os.path.join(good, f'{i:07d}'), 'wb') as w:
+                    w.write(piece)
+                with open(os.path.join(bad, f'{i:07d}'), 'wb') as w:
+                    w.write(b'not a video ' * 50)
+            out = os.path.join(d, 'audio.m4a')
+            ytfrag.assemble_track(good, 3, out)
+            self.assertTrue(os.path.getsize(out) > 0)
+            self.assertFalse(os.path.exists(out + '.part'))
+            self.assertFalse(os.path.exists(good), 'fragments are deleted once the track is complete')
+            broken = os.path.join(d, 'broken.m4a')
+            with self.assertRaises(SystemExit):
+                ytfrag.assemble_track(bad, 3, broken)
+            self.assertFalse(os.path.exists(broken), 'a failed assembly must not leave a track behind')
+            self.assertFalse(os.path.exists(broken + '.part'))
+            self.assertEqual(len(os.listdir(bad)), 3, 'fragments are kept for the next try')
+
+    def test_vodwatch_audio_from_a_file_is_written_atomically(self):
+        sys.path.insert(0, SCRIPTS)
+        try:
+            import vodwatch
+        finally:
+            sys.path.remove(SCRIPTS)
+        with tempfile.TemporaryDirectory() as d:
+            src = os.path.join(d, 'stream.mp4')
+            make_video(src, seconds=4)
+            out = os.path.join(d, 'scan')
+            os.makedirs(out)
+            dest = vodwatch.get_audio({'kind': 'file', 'url': src}, out)
+            self.assertEqual(dest, os.path.join(out, 'audio.m4a'))
+            self.assertTrue(os.path.getsize(dest) > 0)
+            self.assertEqual(os.listdir(out), ['audio.m4a'])
+            junk = os.path.join(d, 'junk.mp4')
+            with open(junk, 'wb') as w:
+                w.write(b'\0' * 1000)
+            out2 = os.path.join(d, 'scan2')
+            os.makedirs(out2)
+            with self.assertRaises(subprocess.CalledProcessError):
+                vodwatch.get_audio({'kind': 'file', 'url': junk}, out2)
+            self.assertEqual(os.listdir(out2), [], 'no audio.m4a (or .part) after a failed conversion')
 
     def test_frame_sheet(self):
         with tempfile.TemporaryDirectory() as d:

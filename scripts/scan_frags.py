@@ -3,7 +3,8 @@
 Writes the same transcript.jsonl format as scan_vod.py (chunk = 1200 s = 600 two-second fragments), so
 scan_vod.py can resume from it later. Stops as soon as the assembled track file appears.
   python3 -I scan_frags.py FRAG_DIR OUT_DIR ASSEMBLED_PATH [--chunks 72] [--model PATH]
-FRAG_DIR is the <out>.frags139 folder that `ytfrag.py track` fills; --chunks = ceil(VOD seconds / 1200).
+FRAG_DIR is the <out>.raw.frags<format>/ folder that `ytfrag.py track` fills (for example
+speed_audio.m4a.raw.frags139/ for `ytfrag.py track <id> 139 speed_audio.m4a`); --chunks = ceil(VOD seconds / 1200).
 The model is found the same way as in scan_vod.py (--model, $WHISPER_MODEL, ~/.cache/whisper.cpp/...)."""
 import json, os, subprocess, sys, time
 if len(sys.argv) >= 2 and sys.argv[1] in ('-h', '--help'):
@@ -11,7 +12,7 @@ if len(sys.argv) >= 2 and sys.argv[1] in ('-h', '--help'):
 if len(sys.argv) < 4:
     print(__doc__); sys.exit(2)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from scan_vod import find_model  # noqa: E402
+from scan_vod import find_model, finished_chunks  # noqa: E402
 frag_dir, out_dir, assembled = sys.argv[1], sys.argv[2], sys.argv[3]
 nchunks = int(sys.argv[sys.argv.index('--chunks') + 1]) if '--chunks' in sys.argv else 72
 MODEL = find_model(sys.argv[sys.argv.index('--model') + 1] if '--model' in sys.argv else None)
@@ -19,19 +20,17 @@ if not MODEL:
     print('no whisper.cpp model found: pass --model PATH or set WHISPER_MODEL'); sys.exit(2)
 os.makedirs(out_dir, exist_ok=True)
 tj = os.path.join(out_dir, 'transcript.jsonl')
-done = set()
-if os.path.exists(tj):
-    for line in open(tj):
-        d = json.loads(line)
-        if d.get('marker') == 'chunk_done':
-            done.add(d['chunk'])
+done = finished_chunks(tj)   # chunks with a chunk_done marker; lines of unfinished chunks are removed
 for i in range(nchunks):
     if i in done:
         continue
     sqs = range(i * 600, i * 600 + 600)
     while True:
-        if os.path.exists(assembled) or not os.path.isdir(frag_dir):
+        if os.path.exists(assembled):
             print('assembled track exists; leaving the rest to scan_vod.py', flush=True); sys.exit(0)
+        if not os.path.isdir(frag_dir):
+            print(f'no fragment folder at {frag_dir}: `ytfrag.py track` keeps its fragments in <out>.raw.frags<format>/',
+                  flush=True); sys.exit(2)
         have = sum(os.path.exists(os.path.join(frag_dir, f'{sq:07d}')) for sq in sqs)
         if have >= 598:
             break
@@ -57,12 +56,11 @@ for i in range(nchunks):
                     '-of', base], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     segs = json.loads(open(base + '.json', 'rb').read().decode('utf-8', 'replace')).get('transcription', [])
     s0 = i * 1200
-    with open(tj, 'a') as w:
-        for sg in segs:
-            txt = sg['text'].strip()
-            if txt:
-                w.write(json.dumps({'chunk': i, 'start': round(s0 + sg['offsets']['from'] / 1000, 2),
-                                    'end': round(s0 + sg['offsets']['to'] / 1000, 2), 'text': txt}) + '\n')
-        w.write(json.dumps({'chunk': i, 'start': s0, 'end': s0, 'text': '', 'marker': 'chunk_done'}) + '\n')
+    lines = [json.dumps({'chunk': i, 'start': round(s0 + sg['offsets']['from'] / 1000, 2),
+                         'end': round(s0 + sg['offsets']['to'] / 1000, 2), 'text': sg['text'].strip()}) + '\n'
+             for sg in segs if sg['text'].strip()]
+    lines.append(json.dumps({'chunk': i, 'start': s0, 'end': s0, 'text': '', 'marker': 'chunk_done'}) + '\n')
+    with open(tj, 'a', encoding='utf-8') as w:    # one write per chunk; the marker goes last
+        w.write(''.join(lines))
     os.remove(wav); os.remove(base + '.json')
     print(f'chunk {i + 1}/{nchunks} transcribed ({s0 / 3600:.2f} h)', flush=True)

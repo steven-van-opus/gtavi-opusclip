@@ -86,13 +86,16 @@ def load_transcript(path, duration=None):
                 line = line.strip()
                 if not line:
                     continue
-                d = json.loads(line)
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue    # a half-written line from an interrupted scan
                 if d.get('marker') == 'chunk_done':
                     marks.append((d.get('chunk'), float(d.get('start', 0))))
                     continue
                 if d.get('text', '').strip():
                     segs.append((float(d['start']), float(d['end']), d['text'].strip()))
-        segs.sort()
+        segs = sorted(set(segs))   # a chunk transcribed twice (resumed or overlapping runs) counts once
         spans = None
         if marks:
             starts = sorted(s for _, s in marks)

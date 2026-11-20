@@ -1,6 +1,6 @@
 ---
 name: find-streams
-description: Find live and recent GTA 6 streams and VODs worth clipping (IShowSpeed, Kai Cenat or any streamer) on YouTube, Twitch and Kick, with length, views and the next step for each. Read-only, downloads nothing. Use when the user asks what to clip, who is live, or for a VOD link.
+description: Find live and recent GTA 6 streams and VODs worth clipping (IShowSpeed, Kai Cenat or any streamer) through a YouTube search, plus each watchlisted channel's YouTube streams and Twitch archives (Kick channels come back as links to open), with length, views and the next step for each. Read-only, downloads nothing. Use when the user asks what to clip, who is live, or for a VOD link.
 argument-hint: "[streamer or search words]"
 ---
 

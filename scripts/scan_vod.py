@@ -9,7 +9,8 @@ Writes to OUT_DIR:
   windows.tsv       30 s windows ranked by an excitement score (loudness z-score + reaction cues + speech rate)
   top_windows.md    the top 150 windows with their transcript text, for a human/agent to read
 Stream time = seconds from the start of the VOD (the audio track's first fragment is t=0).
-Re-running resumes: finished 20-minute chunks are skipped. Needs ffmpeg and whisper-cli (whisper.cpp)
+Re-running resumes: 20-minute chunks with a chunk_done marker are skipped, and the lines of a chunk that
+was cut off before its marker are removed and that chunk runs again. Needs ffmpeg and whisper-cli (whisper.cpp)
 plus a ggml model: --model, $WHISPER_MODEL, or ~/.cache/whisper.cpp/ggml-large-v3-turbo-q5_0.bin
 (rank_moments.py turns the outputs into picked moments with reasons and brand-safety flags).
 """
@@ -83,12 +84,38 @@ def loudness(audio, out_dir, start_off):
     return path
 
 
+def finished_chunks(tj):
+    """Chunk numbers that have a chunk_done marker in transcript.jsonl. Lines from chunks that never got
+    their marker (a run cut off mid-write) and half-written lines are removed from the file first, so
+    those chunks are transcribed again from scratch instead of being skipped or duplicated."""
+    if not os.path.exists(tj):
+        return set()
+    rows, done, broken = [], set(), 0
+    with open(tj, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                d = json.loads(line)
+            except ValueError:
+                broken += 1
+                continue
+            rows.append((d.get('chunk'), line if line.endswith('\n') else line + '\n'))
+            if d.get('marker') == 'chunk_done':
+                done.add(d.get('chunk'))
+    keep = [line for c, line in rows if c is None or c in done]   # lines without a chunk id are not ours to drop
+    if broken or len(keep) != len(rows):
+        tmp = tj + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as w:
+            w.writelines(keep)
+        os.replace(tmp, tj)
+        print(f'removed {len(rows) - len(keep) + broken} line(s) of unfinished chunks; those chunks run again', flush=True)
+    return done
+
+
 def whisper(audio, out_dir, total, chunk, model, start_off):
     tj = os.path.join(out_dir, 'transcript.jsonl')
-    done = set()
-    if os.path.exists(tj):
-        for line in open(tj):
-            done.add(json.loads(line).get('chunk'))
+    done = finished_chunks(tj)
     n = int(math.ceil(total / chunk))
     for i in range(n):
         if i in done:
@@ -101,14 +128,12 @@ def whisper(audio, out_dir, total, chunk, model, start_off):
         run(['whisper-cli', '-m', model, '-f', wav, '-l', 'en', '-t', THREADS, '-np', '-oj', '-bs', '1', '-bo', '1', '-of', base],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         segs = json.loads(open(base + '.json', 'rb').read().decode('utf-8', 'replace')).get('transcription', [])
-        with open(tj, 'a') as w:
-            for sg in segs:
-                txt = sg['text'].strip()
-                if not txt:
-                    continue
-                w.write(json.dumps({'chunk': i, 'start': round(s + sg['offsets']['from'] / 1000, 2),
-                                    'end': round(s + sg['offsets']['to'] / 1000, 2), 'text': txt}) + '\n')
-            w.write(json.dumps({'chunk': i, 'start': s, 'end': s, 'text': '', 'marker': 'chunk_done'}) + '\n')
+        lines = [json.dumps({'chunk': i, 'start': round(s + sg['offsets']['from'] / 1000, 2),
+                             'end': round(s + sg['offsets']['to'] / 1000, 2), 'text': sg['text'].strip()}) + '\n'
+                 for sg in segs if sg['text'].strip()]
+        lines.append(json.dumps({'chunk': i, 'start': s, 'end': s, 'text': '', 'marker': 'chunk_done'}) + '\n')
+        with open(tj, 'a', encoding='utf-8') as w:    # one write per chunk; the marker goes last
+            w.write(''.join(lines))
         os.remove(wav)
         os.remove(base + '.json')
         print(f'chunk {i + 1}/{n} done ({s / 3600:.2f}h)', flush=True)
@@ -129,9 +154,12 @@ def rank(out_dir, total):
     text = [[] for _ in range(nw)]
     tp = os.path.join(out_dir, 'transcript.jsonl')
     if os.path.exists(tp):
-        for line in open(tp):
-            d = json.loads(line)
-            if d.get('marker') or not d['text']:
+        for line in open(tp, encoding='utf-8', errors='replace'):
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue    # a half-written line from an interrupted run; whisper() removes it
+            if d.get('marker') or not d.get('text'):
                 continue
             k = int(d['start'] // W)
             if 0 <= k < nw:

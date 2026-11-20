@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- "How it works" diagram for the README. Render:
-     node scripts/render.mjs still --html docs/src/architecture.html --out docs/img/how-it-works.png --width 1400 --height 980 --scale 2 -->
+     RENDER_DEPS=<folder with puppeteer-core> node scripts/render.mjs still --html docs/src/architecture.html --out docs/img/how-it-works.png --width 1400 --height 980 --scale 2 -->
 <html><head><meta charset="utf-8"><title>how gtavi-opusclip works</title>
 <style>
   html,body{margin:0;width:1400px;height:980px;background:#0e0b1a;overflow:hidden;font-family:Inter,"Avenir Next","Helvetica Neue",Arial,sans-serif}
@@ -27,15 +27,15 @@
 <div class="lane" style="top:652px"><b style="color:#ffd23d">PUBLISH WITH CARE</b></div>
 
 <!-- row 1: left to right -->
-<div class="box cy" style="left:45px;top:140px"><div class="t">find-streams</div><div class="d">Live and recent GTA 6 streams and VODs on <em>YouTube, Twitch, Kick</em>. Read-only.</div></div>
+<div class="box cy" style="left:45px;top:140px"><div class="t">find-streams</div><div class="d">Live and recent GTA 6 streams: <em>YouTube</em> search, plus watchlisted <em>YouTube and Twitch</em> channels (Kick as links). Read-only.</div></div>
 <div class="box cy" style="left:385px;top:140px"><div class="t">vodwatch</div><div class="d">Audio only (<em>ytfrag.py</em>) → <em>whisper.cpp</em> → loudness + reaction words → every 30 s window ranked.</div></div>
 <div class="box cy" style="left:725px;top:140px"><div class="t">pick-moments</div><div class="d"><em>Frame sheets</em> of the top picks + a hook / payoff / reaction rubric and <em>brand-safety flags</em>.</div></div>
 <div class="box cy" style="left:1065px;top:140px"><div class="t">plan_jobs</div><div class="d">Pads and merges windows, <em>estimates credits</em>, routes each job by source length.</div></div>
 
 <!-- row 2: right to left -->
-<div class="box pk" style="left:1065px;top:410px"><div class="t">route</div><div class="d"><em>≤ 10 h:</em> URL + time range (only the range is billed).<br><em>&gt; 10 h or Kick:</em> cut-windows → 4-step upload.</div></div>
+<div class="box pk" style="left:1065px;top:410px"><div class="t">route</div><div class="d"><em>≤ 10 h:</em> URL + time range (only the range is billed).<br><em>&gt; 10 h or Kick:</em> cut&#8209;windows → 4&#8209;step upload.</div></div>
 <div class="box pk" style="left:725px;top:410px"><div class="t">ClipAnything</div><div class="d">Genre <em>Gaming</em>, <em>Gameplay layout</em> (facecam 30% / gameplay 70%), animated captions, a prompt per moment.</div></div>
-<div class="box pk" style="left:385px;top:410px"><div class="t">clips + check</div><div class="d">Ranked clips with titles and <em>Virality Score</em>. Download, frame-check, bleep profanity.</div></div>
+<div class="box pk" style="left:385px;top:410px"><div class="t">clips + check</div><div class="d">Ranked clips with titles and <em>Virality Score</em>. Download, frame&#8209;check, bleep profanity.</div></div>
 <div class="box pk" style="left:45px;top:410px"><div class="t">hooks + copy</div><div class="d">3 hooks per clip, per-platform copy, <em>credit line</em> on every post, <em>#ad</em> when paid.</div></div>
 
 <!-- row 3: left to right -->
@@ -67,6 +67,6 @@
   <!-- campaigns feeds the rules -->
   <line x1="1063" y1="769" x2="1019" y2="769" stroke="#ffd23d" stroke-width="3" stroke-dasharray="9 7" marker-end="url(#ad)"/>
 </svg>
-<div class="note"><b>Guarded:</b> a hook asks before anything spends OpusClip credits or publishes · your API key stays in your shell · the MCP signs in with OAuth in your browser</div>
+<div class="note"><b>Guarded:</b> a hook asks before opusclip_api.py or an OpusClip MCP tool spends credits or publishes · your API key stays in your shell · the MCP signs in with OAuth</div>
 <script>window.__ready = true;</script>
 </body></html>

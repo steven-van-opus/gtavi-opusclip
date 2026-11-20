@@ -11,7 +11,10 @@ Usage:
 
 Signed fragment URLs come from `yt-dlp -g` and are refreshed on 401/403/410, on slow fragments and
 every 1,500 fragments (YouTube throttles a URL after a few thousand). Downloads resume: finished
-fragments stay in <out>.frags<format>/ until the file is assembled. Never run `yt-dlp -J` on a
+fragments stay on disk until the file is assembled, in <out>.raw.frags<format>/ for `track` (for
+example speed_audio.m4a.raw.frags139/) and in <out>.parts/ for `window`. `track` assembles into
+<out>.part and renames it to <out> only when ffmpeg succeeds, so an interrupted assembly never leaves a
+short <out> behind, and the fragments are deleted only after that. Never run `yt-dlp -J` on a
 24-hour VOD (its info JSON can be hundreds of MB); this script only asks for -g and duration.
 Common formats: video 299 = 1080p60, 137 = 1080p, 298 = 720p60, 134 = 360p; audio 140 = AAC 128k,
 139 = AAC 48k (plenty for transcription).
@@ -212,28 +215,55 @@ def cmd_window(argv):
     print(f'wrote {out}: {a:.2f}-{b:.2f}s of {vid} (fragments {sq0}-{sq1})')
 
 
+MUXER = {'.m4a': 'ipod', '.m4b': 'ipod', '.mp4': 'mp4', '.mov': 'mov', '.aac': 'adts'}
+
+
+def assemble_track(tmpdir, n, out):
+    """Stream fragments 0..n-1 of tmpdir through ffmpeg into compact mono 16 kHz AAC (32 kbps).
+    ffmpeg writes <out>.part; only when it exits 0 is that renamed to <out> and the fragments deleted.
+    On failure the fragments stay, so the next run re-assembles without downloading again."""
+    part = out + '.part'
+    fmt = MUXER.get(os.path.splitext(out)[1].lower(), 'mp4')
+    ff = subprocess.Popen(['ffmpeg', '-loglevel', 'error', '-y', '-f', 'mp4', '-i', 'pipe:0', '-vn',
+                           '-af', 'aresample=async=1:first_pts=0', '-ac', '1', '-ar', '16000',
+                           '-c:a', 'aac', '-b:a', '32k', '-f', fmt, part], stdin=subprocess.PIPE)
+    try:
+        for sq in range(0, n):
+            p = os.path.join(tmpdir, f'{sq:07d}')
+            if os.path.exists(p):
+                with open(p, 'rb') as r:
+                    ff.stdin.write(r.read())
+    except BrokenPipeError:
+        pass                                    # ffmpeg died; its exit code says so below
+    finally:
+        try:
+            ff.stdin.close()
+        except BrokenPipeError:
+            pass
+    if ff.wait() != 0:
+        if os.path.exists(part):
+            os.remove(part)
+        raise SystemExit(f'ffmpeg could not assemble {out} (exit {ff.returncode}); the fragments are kept in '
+                         f'{tmpdir}, so re-run the same command to try again without downloading')
+    os.replace(part, out)
+    shutil.rmtree(tmpdir, ignore_errors=True)
+    return out
+
+
 def cmd_track(argv):
-    """Whole track -> compact mono 16 kHz AAC (32 kbps). Fragments are streamed into ffmpeg and deleted as
-    they go, so peak disk use stays near the size of the fragments themselves."""
+    """Whole track -> compact mono 16 kHz AAC (32 kbps). The fragments are kept until the assembled
+    file is complete, so peak disk use is the fragments plus the (smaller) finished track."""
     vid, fid, out = argv[0], argv[1], argv[2]
     opts = dict(zip(argv[3::2], argv[4::2]))
     jobs = int(opts.get('--jobs', 8))
+    if os.path.exists(out) and not os.path.isdir(os.path.abspath(out + '.raw') + f'.frags{fid}'):
+        print(f'{out} is already assembled (delete it to download again)', flush=True)
+        return
     src = Source(vid)
     n = int(opts.get('--frags', 0)) or int(src.duration() // Source.SEG) + 2
     print(f'{vid} format {fid}: fetching ~{n} fragments', flush=True)
     tmpdir = download_range(src, fid, 0, n - 1, out + '.raw', jobs=jobs, tolerate_tail=True, assemble=False)
-    ff = subprocess.Popen(['ffmpeg', '-loglevel', 'error', '-y', '-f', 'mp4', '-i', 'pipe:0', '-vn', '-af', 'aresample=async=1:first_pts=0', '-ac', '1', '-ar', '16000',
-                           '-c:a', 'aac', '-b:a', '32k', out], stdin=subprocess.PIPE)
-    for sq in range(0, n):
-        p = os.path.join(tmpdir, f'{sq:07d}')
-        if not os.path.exists(p):
-            continue
-        with open(p, 'rb') as r:
-            ff.stdin.write(r.read())
-        os.remove(p)
-    ff.stdin.close()
-    ff.wait()
-    shutil.rmtree(tmpdir, ignore_errors=True)
+    assemble_track(tmpdir, n, out)
     st, en = probe_span(out)
     print(f'wrote {out} (duration {en - st:.1f}s)', flush=True)
 

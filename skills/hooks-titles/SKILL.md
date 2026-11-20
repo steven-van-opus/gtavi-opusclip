@@ -33,7 +33,7 @@ Pick one for the clip and keep the other two as A/B options for reposts. `scoreb
 |---|---|---|---|
 | OpusClip Auto headline (formerly Auto hook) | One-line AI hook over the first seconds of the top 10 clips. | | Off by default for API projects; turn it on with `opusclip_api.py create --auto-hook`. |
 | OpusClip Viral Hook | Template opening: animated text, zoom and sound effects. | 20 credits per clipping run, or 2 per hook in the editor. | Pro and up. Say the cost before using it. |
-| Your own title card | Render with `render.mjs` (`node "${CLAUDE_PLUGIN_ROOT}/scripts/render.mjs" still --html card.html --out card.png --width 1080 --height 1920 --transparent`), then overlay with ffmpeg (`overlay=0:0`, first 2 s). | | Keep it inside the top band so it doesn't cover the facecam. |
+| Your own title card | Render with `render.mjs` (`RENDER_DEPS="${CLAUDE_PLUGIN_DATA}/node" node "${CLAUDE_PLUGIN_ROOT}/scripts/render.mjs" still --html card.html --out card.png --width 1080 --height 1920 --transparent`; the `setup` skill installs puppeteer-core there), then overlay with ffmpeg (`overlay=0:0`, first 2 s). | | Keep it inside the top band so it doesn't cover the facecam. |
 | Edit in OpusClip | `opusclip_edit_clip` text-overlay operations (MCP), or the OpusClip editor. | | |
 
 ## Thumbnails and covers

@@ -6,7 +6,7 @@
   python3 -I copy_kit.py --hook "..." --streamer "Kai Cenat" --source-platform Twitch \\
       --credit "twitch.tv/KaiCenat" --campaign-tag "#KAI" --paid --json
 
-What it enforces (warnings, not silent edits):
+What it enforces (warnings, not silent edits; the exit code is 1 when there is any warning, also with --json):
   * a credit line on every caption ("🎥 IShowSpeed (YouTube)", or your --credit text)
   * #ad first when the post is paid or part of a paid campaign (--paid); also switch on the
     platform's own label (X Paid Partnership, TikTok content disclosure, IG Paid partnership)
@@ -67,7 +67,8 @@ def build(hook, streamer, source_platform, tags=None, credit=None, campaign_tag=
             lines.append('#ad')
         if plat == 'shorts':
             title = hook if len(hook) <= lim['title'] else hook[:lim['title'] - 1].rstrip() + '…'
-            body = '\n'.join(filter(None, [('#ad ' if paid else '') + extra, credit_txt, ' '.join(tags_p)]))
+            first = ' '.join(filter(None, ['#ad' if paid else '', extra]))
+            body = '\n'.join(filter(None, [first, credit_txt, ' '.join(tags_p)]))
             text = {'title': title, 'description': body.strip()}
             chars = {'title': len(title), 'description': len(body)}
         else:
@@ -79,8 +80,10 @@ def build(hook, streamer, source_platform, tags=None, credit=None, campaign_tag=
                 lines.append(' '.join(tags_p))
             text = '\n\n'.join([lines[0] + ' ' + lines[1]] + lines[2:]) if paid else '\n\n'.join(lines)
             chars = len(text)
+        # Shorts: the disclosure leads the description (the title is the hook), so #ad-first is checked there
         warnings = check(text if isinstance(text, str) else text['title'] + '\n' + text['description'], lim, chars, plat,
-                         paid, campaign_tag, credit_txt)
+                         paid, campaign_tag, credit_txt,
+                         disclosure_text=text if isinstance(text, str) else text['description'])
         posts[plat] = {'text': text, 'chars': chars, 'limit': lim, 'warnings': warnings}
     return {'credit': credit_txt, 'posts': posts,
             'reminders': ['Put the credit on screen too (top or bottom band), not only in the caption.',
@@ -88,7 +91,9 @@ def build(hook, streamer, source_platform, tags=None, credit=None, campaign_tag=
                           'Read the campaign brief: required tags, no logos/watermarks, footage rules, submission window.']}
 
 
-def check(text, lim, chars, plat, paid, campaign_tag, credit_txt):
+def check(text, lim, chars, plat, paid, campaign_tag, credit_txt, disclosure_text=None):
+    """Warnings for one caption. disclosure_text is the part that must open with #ad on a paid post
+    (the whole caption, or a Shorts description)."""
     w = []
     cap = lim.get('caption')
     if isinstance(chars, int) and cap and chars > cap:
@@ -100,7 +105,8 @@ def check(text, lim, chars, plat, paid, campaign_tag, credit_txt):
             w.append(f'"{re.search(rx, text, re.I).group(0)}": {why}')
     if credit_txt not in text:
         w.append('credit line missing')
-    if paid and not text.lstrip().startswith('#ad') and '#ad' not in text.split('\n')[0]:
+    lead = text if disclosure_text is None else disclosure_text
+    if paid and not lead.lstrip().startswith('#ad') and '#ad' not in lead.lstrip().split('\n')[0]:
         w.append('#ad must come first on a paid post')
     if campaign_tag and campaign_tag.lstrip('#').lower() not in text.lower():
         w.append(f'campaign tag {campaign_tag} missing')
@@ -121,9 +127,10 @@ def main(argv=None):
     ap.add_argument('--json', action='store_true')
     a = ap.parse_args(argv)
     r = build(a.hook, a.streamer, a.source_platform, a.tags.split(','), a.credit, a.campaign_tag, a.paid, a.extra)
+    status = 1 if any(p['warnings'] for p in r['posts'].values()) else 0   # same exit code in both modes
     if a.json:
         print(json.dumps(r, indent=2, ensure_ascii=False))
-        return 0
+        return status
     for plat, p in r['posts'].items():
         print(f'===== {plat} ({p["chars"]} chars)')
         if isinstance(p['text'], dict):
@@ -135,7 +142,7 @@ def main(argv=None):
         print()
     for rem in r['reminders']:
         print(f'- {rem}')
-    return 1 if any(p['warnings'] for p in r['posts'].values()) else 0
+    return status
 
 
 if __name__ == '__main__':

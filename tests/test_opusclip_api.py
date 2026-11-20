@@ -363,5 +363,80 @@ class TestCli(unittest.TestCase):
         self.assertEqual(t.calls, [])
 
 
+class TestBatchSlotsAndVodTimes(unittest.TestCase):
+    """batch frees a slot when a project fails, gives up after --timeout, and clips/download report stream time."""
+
+    def _plan(self, d, duration=7 * 3600):
+        import plan_jobs
+        moments = [{'rank': 1, 'start': 3600, 'end': 3660}, {'rank': 2, 'start': 20000, 'end': 20060}]
+        plan = plan_jobs.build_plan(moments, 'https://www.youtube.com/watch?v=abcdefghijk', duration=duration)
+        p = os.path.join(d, 'plan.json')
+        with open(p, 'w') as fh:
+            json.dump(plan, fh)
+        return p
+
+    def _client(self, answers):
+        t, now = FakeTransport(answers), [0.0]
+
+        def sleep(s):
+            now[0] += s
+        return oc.OpusClip(api_key=KEY, transport=t, sleep=sleep, clock=lambda: now[0], min_interval=0), t
+
+    def test_project_with_an_error_frees_its_slot(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = self._plan(d)
+            c, t = self._client([(201, {}, {'id': 'P1', 'stage': 'QUEUED'}),
+                                 (200, {}, {'id': 'P1', 'stage': 'IMPORT', 'error': 'import failed'}),
+                                 (201, {}, {'id': 'P2', 'stage': 'QUEUED'})])
+            code, out, err = run_main(['batch', p, '--yes', '--max-concurrent', '1'], c)
+            with open(p) as fh:
+                saved = json.load(fh)
+        self.assertEqual(code, 0, err)
+        self.assertEqual([x['method'] for x in t.calls], ['POST', 'GET', 'POST'])
+        self.assertEqual([j['projectId'] for j in saved['jobs']], ['P1', 'P2'])
+
+    def test_waiting_for_a_slot_times_out(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = self._plan(d)
+            c, t = self._client([(201, {}, {'id': 'P1', 'stage': 'QUEUED'})])   # P1 never finishes
+            code, out, err = run_main(['batch', p, '--yes', '--max-concurrent', '1', '--interval', '30',
+                                       '--timeout', '60'], c)
+            with open(p) as fh:
+                saved = json.load(fh)
+        self.assertEqual(code, oc.EXIT_API)
+        self.assertIn('no free project slot after 60s', err)
+        self.assertEqual(saved['jobs'][0]['projectId'], 'P1', 'jobs already sent stay in the plan for a re-run')
+        self.assertIsNone(saved['jobs'][1].get('projectId'))
+        self.assertEqual(sum(1 for x in t.calls if x['method'] == 'POST'), 1)
+
+    def test_clip_times_become_stream_times_for_upload_jobs(self):
+        clip = {'id': 'P1.CUa', 'projectId': 'P1', 'durationMs': 30000, 'timeRanges': [[12000, 42000]],
+                'title': 'Alligator', 'score': 90}
+        with tempfile.TemporaryDirectory() as d:
+            p = self._plan(d, duration=23.7 * 3600)          # longer than 10 h: every job routes "upload"
+            with open(p) as fh:
+                plan = json.load(fh)
+            self.assertEqual(plan['route'], 'upload')
+            plan['jobs'][0]['projectId'] = 'P1'
+            with open(p, 'w') as fh:
+                json.dump(plan, fh)
+            start = plan['jobs'][0]['start']
+            c, _ = self._client([(200, {}, [clip])])
+            code, out, err = run_main(['--json', 'clips', 'P1', '--plan', p], c)
+            got = json.loads(out)[0]
+            self.assertEqual(code, 0, err)
+            self.assertAlmostEqual(got['sourceStart'], 12.0)                  # inside the uploaded cut
+            self.assertAlmostEqual(got['vodStart'], start + 12.0)             # in the stream
+            self.assertAlmostEqual(got['vodEnd'], start + 42.0)
+            self.assertEqual(got['job'], 'job01')
+            c, _ = self._client([(200, {}, [clip])])
+            code, out, _ = run_main(['clips', 'P1'], c)
+            self.assertIn("VOD time = the job's start in plan.json", out)
+            c, _ = self._client([(200, {}, [clip])])
+            code, _, err = run_main(['clips', 'P9', '--plan', p], c)
+            self.assertEqual(code, oc.EXIT_USAGE)
+            self.assertIn('not in', err)
+
+
 if __name__ == '__main__':
     unittest.main()

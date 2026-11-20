@@ -8,11 +8,13 @@ GTA 6 launch-day release.
 - Harness:
   - OpusClip's hosted MCP server (`https://mcp.opus.pro/mcp`, OAuth), bundled in `.mcp.json`;
   - `scripts/opusclip_api.py`, a stdlib REST client for the documented API. It covers create from a URL, an uploadId or a file (V2 upload); status, wait, clips, download, transcript and censor; social copy, post, schedule and unschedule. `--dry-run` and `--yes` gates are built in.
-- `hooks/hooks.json` with `scripts/guard.py`: Claude Code asks before any OpusClip call that spends credits or publishes.
+- `hooks/hooks.json` with `scripts/guard.py`: Claude Code asks before this plugin's `opusclip_api.py` or an OpusClip MCP tool spends credits or publishes. MCP: every OpusClip tool except the 15 documented read-only ones. Bash: each `opusclip_api.py` call in a command is checked on its own, so a chained dry run or a `# --dry-run` comment doesn't hide a real run. Other tools, such as the official plugin's CLI, aren't covered.
 - Whole-VOD scanning:
   - `vodwatch.py` (resolve, audio, scan, rank, frame sheets, plan, report);
   - `rank_moments.py` (local-baseline loudness, jumps, rarity-weighted reaction cues, speech rate, music and loop penalties, brand-safety flags, recall evaluation);
   - `frame_sheet.py`, `plan_jobs.py` (10 h routing, credit estimate) and `cut_windows.py` (frame-rate normalization).
 - Tested tools carried over: `ytfrag.py`, `scan_vod.py`, `scan_frags.py` and `render.mjs`. They gained `--help`, model lookup through `$WHISPER_MODEL` and `~/.cache/whisper.cpp`, and a portable puppeteer-core lookup through `$RENDER_DEPS`.
+- Safe resume: a transcript chunk counts as done only with its `chunk_done` marker (lines of a chunk cut off mid-write are removed and the chunk runs again), and `ytfrag.py track` and `vodwatch.py` write the audio to `<file>.part` and rename it only when ffmpeg succeeds, deleting fragments after that.
+- `opusclip_api.py batch` treats a project with an error as finished and stops waiting for a free slot after `--timeout`; `clips` and `download` take `--plan plan.json` to report clip times in the stream (`vodStart`/`vodEnd`) for provenance.
 - Packaging and growth: `countdown.py`, `copy_kit.py`, `post_calendar.py`, `scoreboard.py`, `campaign_math.py`, `find_streams.py` and `doctor.py`.
 - README art (original mascot, banner, diagram, badges), with sources in `docs/src/`.

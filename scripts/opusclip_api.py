@@ -14,6 +14,8 @@ scores, download them, and (only when you say so) write social copy, post or sch
   python3 -I opusclip_api.py create --url ... --start 1:00:00 --end 1:20:00 --yes --wait
   python3 -I opusclip_api.py clips PROJECT_ID --top 10
   python3 -I opusclip_api.py download PROJECT_ID --top 5 --out clips/
+  # projects made by "batch plan.json": add --plan plan.json to get each clip's time in the stream
+  # (for "upload" jobs OpusClip's times are inside the uploaded cut, so the job's start is added)
   # a local window (cut with cut_windows.py), 4-step V2 upload then create:
   python3 -I opusclip_api.py create --file cuts/job01.mp4 --title "Speed, alligator" --yes
 
@@ -659,17 +661,45 @@ def _emit(args, data, human=None):
         human(data)
 
 
+def plan_job(plan_path, project_id):
+    """The job in a plan.json (written by plan_jobs.py, filled in by batch) that created project_id."""
+    with open(plan_path) as f:
+        plan = json.load(f)
+    for job in plan.get('jobs') or []:
+        if job.get('projectId') == project_id:
+            return job
+    raise UsageError(f'project {project_id} is not in {plan_path} (batch writes each job\'s projectId there)')
+
+
+def add_vod_times(clips, job):
+    """OpusClip reports clip times inside the video it processed. For an "upload" job that video is the local
+    cut, which starts at job["start"] in the stream, so VOD time = job start + clip time. A "url" job imports
+    the VOD itself with a range, so its times are used as OpusClip reports them."""
+    offset = float(job.get('start') or 0) if job.get('route') == 'upload' else 0.0
+    for c in clips:
+        c['job'] = job.get('id')
+        if c.get('sourceStart') is not None:
+            c['vodStart'] = round(c['sourceStart'] + offset, 2)
+            c['vodEnd'] = round(c['sourceEnd'] + offset, 2) if c.get('sourceEnd') is not None else None
+    return clips
+
+
 def _print_clips(clips):
     if not clips:
         print('no clips yet')
         return
-    print(f'{"#":>2}  {"score*":>6}  {"dur":>5}  {"source in-out":<19}  {"clip id":<22}  title')
+    vod = any(c.get('vodStart') is not None for c in clips)
+    print(f'{"#":>2}  {"score*":>6}  {"dur":>5}  {"VOD in-out" if vod else "source in-out**":<19}  {"clip id":<22}  title')
     for i, c in enumerate(clips, 1):
         sc = '-' if c.get('score') is None else f'{c["score"]:.0f}' if isinstance(c['score'], (int, float)) else str(c['score'])
-        span = f'{hms(c["sourceStart"])}-{hms(c["sourceEnd"])}' if c.get('sourceStart') is not None else ''
+        a, b = (c.get('vodStart'), c.get('vodEnd')) if vod else (c.get('sourceStart'), c.get('sourceEnd'))
+        span = f'{hms(a)}-{hms(b)}' if a is not None else ''
         print(f'{i:>2}  {sc:>6}  {c["durationSec"]:>5.1f}  {span:<19}  {c["clipId"][:22]:<22}  {c["title"][:70]}')
     print('\n* score: the clip-level score field OpusClip returns (OpusClip\'s own CLI reads it; it is not in the public '
           'schema). The app shows it as the Virality Score (0-99), a prediction, not a promise.')
+    if not vod:
+        print('** times inside the video OpusClip processed. For an "upload" job that is the local cut, not the '
+              'stream: VOD time = the job\'s start in plan.json + this time. Add --plan plan.json to print VOD times.')
 
 
 def _source_from_args(args, client):
@@ -764,6 +794,8 @@ def cmd_clips(args, client):
     clips = client.clips(args.project_id)
     if args.top:
         clips = clips[:args.top]
+    if args.plan:
+        add_vod_times(clips, plan_job(args.plan, args.project_id))
     if args.out:
         with open(args.out, 'w') as w:
             json.dump(clips, w, indent=2)
@@ -776,6 +808,8 @@ def cmd_download(args, client):
     clips = client.clips(args.project_id)
     if args.top:
         clips = clips[:args.top]
+    if args.plan:
+        add_vod_times(clips, plan_job(args.plan, args.project_id))   # clips.json gets vodStart/vodEnd for provenance
     saved = client.download_clips(clips, args.out, preview=args.preview)
     _emit(args, saved, lambda s: print(f'{len(s)} clip(s) -> {args.out}'))
     return EXIT_OK
@@ -933,14 +967,22 @@ def cmd_batch(args, client):
         raise UsageError(f'job(s) {", ".join(map(str, missing))} need a local cut first: run cut_windows.py --plan {args.plan}')
     running = []
     for job in todo:
+        waiting_since = None
         while len(running) >= args.max_concurrent and not client.dry_run:
             still = []
             for pid in running:
-                st = (client.project(pid) or {}).get('stage')
-                if st not in ('COMPLETE', 'STALLED'):
+                p = client.project(pid) or {}
+                # finished: COMPLETE, STALLED, or any project with an error (wait() treats that as final too)
+                if p.get('stage') not in ('COMPLETE', 'STALLED') and not p.get('error'):
                     still.append(pid)
             running = still
             if len(running) >= args.max_concurrent:
+                if waiting_since is None:
+                    waiting_since = client.clock()
+                elif client.clock() - waiting_since > args.timeout:
+                    raise ApiError(0, None, f'no free project slot after {args.timeout}s: {", ".join(running)} still '
+                                            'processing. The jobs sent so far are saved in the plan; re-run batch '
+                                            'later to send the rest.')
                 client.log(f'{len(running)} projects still processing; waiting {args.interval}s (limit {args.max_concurrent})')
                 client.sleep(args.interval)
         body = dict(job['request'])
@@ -1033,10 +1075,13 @@ def build_parser():
             s.add_argument('--timeout', type=int, default=4 * 3600)
         s.set_defaults(fn=fn)
 
+    plan_help = ('plan.json the project came from (batch writes projectId into it): adds vodStart/vodEnd, the clip\'s '
+                 'place in the stream, which for "upload" jobs is the job start + the time inside the cut')
     s = sub.add_parser('clips', help='list a project\'s clips (title, score, duration, source range), best first')
     s.add_argument('project_id')
     s.add_argument('--top', type=int, default=0)
     s.add_argument('--out', help='also save the list as JSON')
+    s.add_argument('--plan', help=plan_help)
     s.set_defaults(fn=cmd_clips)
 
     s = sub.add_parser('download', help='download the rendered MP4s (uriForExport) of the best clips')
@@ -1044,6 +1089,7 @@ def build_parser():
     s.add_argument('--top', type=int, default=0)
     s.add_argument('--out', default='clips')
     s.add_argument('--preview', action='store_true', help='download the preview MP4 instead of the export')
+    s.add_argument('--plan', help=plan_help)
     s.set_defaults(fn=cmd_download)
 
     s = sub.add_parser('transcript', help='source transcript of a project (billed range only)')
@@ -1067,7 +1113,8 @@ def build_parser():
     s.add_argument('--max-concurrent', type=int, default=4, help='projects processing at once (Pro Beta/Max limit: 4)')
     s.add_argument('--wait', action='store_true')
     s.add_argument('--interval', type=int, default=30)
-    s.add_argument('--timeout', type=int, default=4 * 3600)
+    s.add_argument('--timeout', type=int, default=4 * 3600,
+                   help='seconds to wait for a free project slot, and for each project with --wait')
     s.add_argument('--yes', action='store_true')
     s.set_defaults(fn=cmd_batch)
 

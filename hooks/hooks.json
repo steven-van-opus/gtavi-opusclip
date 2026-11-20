@@ -1,5 +1,5 @@
 {
-  "description": "Ask before anything spends OpusClip credits or publishes. The hosted OpusClip MCP server posts, schedules and shares the moment a tool is called.",
+  "description": "Ask before this plugin's opusclip_api.py or an OpusClip MCP tool spends credits or publishes. The hosted OpusClip MCP server posts, schedules and shares the moment a tool is called.",
   "hooks": {
     "PreToolUse": [
       {

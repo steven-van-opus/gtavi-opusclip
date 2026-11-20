@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(HERE, '..', 'scripts'))
 import campaign_math as cm  # noqa: E402
 import plan_jobs as pj  # noqa: E402
 import rank_moments as rm  # noqa: E402
+import scan_vod  # noqa: E402
 
 
 def synthetic_stream(hours=2.0, seed=7):
@@ -82,6 +83,36 @@ class TestRanker(unittest.TestCase):
         self.assertEqual(spans, [(0.0, 2400.0), (3600.0, 4800.0)])
         rows = rm.rank(segs, {}, spans)
         self.assertFalse(any(2400 <= r['t'] < 3600 for r in rows))
+
+    def test_resume_redoes_a_chunk_cut_off_mid_write(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, 'transcript.jsonl')
+            with open(p, 'w') as w:
+                for chunk in (0, 1):
+                    s = chunk * 1200
+                    w.write(json.dumps({'chunk': chunk, 'start': s + 10, 'end': s + 14, 'text': 'hello chat'}) + '\n')
+                    w.write(json.dumps({'chunk': chunk, 'start': s, 'end': s, 'text': '', 'marker': 'chunk_done'}) + '\n')
+                w.write(json.dumps({'chunk': 2, 'start': 2410, 'end': 2414, 'text': 'no way bro'}) + '\n')  # no marker
+                w.write('{"chunk": 2, "start": 2420, "end": 24')                                          # half a line
+            segs, spans = rm.load_transcript(p)          # the ranker reads past the broken line
+            self.assertEqual(spans, [(0.0, 2400.0)])
+            self.assertEqual(scan_vod.finished_chunks(p), {0, 1}, 'only a chunk_done marker finishes a chunk')
+            with open(p) as fh:
+                rows = [json.loads(line) for line in fh]
+            self.assertEqual({r['chunk'] for r in rows}, {0, 1}, "chunk 2's orphan lines are removed before it is redone")
+            self.assertEqual(len(rows), 4)
+            self.assertEqual(scan_vod.finished_chunks(p), {0, 1})
+            self.assertEqual(scan_vod.finished_chunks(os.path.join(d, 'missing.jsonl')), set())
+
+    def test_duplicate_segments_count_once(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, 'transcript.jsonl')
+            line = json.dumps({'chunk': 0, 'start': 10, 'end': 14, 'text': 'no way'}) + '\n'
+            with open(p, 'w') as w:
+                w.write(line + line)
+                w.write(json.dumps({'chunk': 0, 'start': 0, 'end': 0, 'text': '', 'marker': 'chunk_done'}) + '\n')
+            segs, _ = rm.load_transcript(p)
+        self.assertEqual(segs, [(10.0, 14.0, 'no way')])
 
     def test_youtube_caption_dedupe(self):
         vtt = ('WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nno way bro\n\n'

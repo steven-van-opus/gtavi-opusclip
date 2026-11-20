@@ -2,7 +2,8 @@
   "name": "gtavi-opusclip",
   "displayName": "GTA 6 Clip Desk for OpusClip",
   "version": "1.0.0",
-  "description": "Turn GTA 6 streams (IShowSpeed, Kai Cenat, any streamer) into ready-to-post 9:16 clips with OpusClip: find streams, scan whole VODs locally, pick and verify moments, send them to OpusClip (MCP or REST API), write hooks and per-platform copy, credit the streamer, schedule, and learn from the numbers.",
+  "description": "Turn GTA 6 streams from any streamer into ready-to-post 9:16 clips with OpusClip: find streams, scan whole VODs locally, pick and verify moments, send them to OpusClip (MCP or REST API), write hooks and per-platform copy, credit the streamer, schedule, and learn from the numbers.",
+  "icon": "./.claude-plugin/icon.png",
   "author": {
     "name": "[OWNER]",
     "url": "https://github.com/[OWNER]"

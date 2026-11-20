@@ -32,7 +32,7 @@ GTA 6 just broke the streaming record for a game launch: 7.91M people watching a
 /plugin install gtavi-opusclip@gtavi-opusclip
 ```
 
-**2. Connect OpusClip.** Either way works.
+**2. Connect OpusClip.** Either way works for links up to 10 h. GTA 6 launch VODs are longer, so their windows are cut locally (`cut_windows.py`) and uploaded: `opusclip_api.py batch` does the upload for you, or use `opusclip_create_upload_link` over MCP.
 
 - **MCP (interactive).** The plugin bundles OpusClip's hosted MCP server, `https://mcp.opus.pro/mcp`. Run `/mcp`, pick `opusclip` and authenticate; you sign in on OpusClip's own OAuth page in your browser. OpusClip MCP tool calls need a Pro (Beta), Max or Business plan.
 - **REST API (scripts and automation).** Create a key at [clip.opus.pro/dashboard](https://clip.opus.pro/dashboard) → API Access → Create key, then export it in your shell. Never commit it.
@@ -76,10 +76,11 @@ Claude stops for your yes before it spends credits, and before every post.
 
 ```bash
 python3 -I scripts/vodwatch.py run "https://www.youtube.com/watch?v=<VOD_ID>" --clips 8 --out scans/speed
+python3 -I scripts/cut_windows.py --plan scans/speed/plan.json   # only when plan.json routes "upload" (over 10 h, Kick, local files)
 python3 -I scripts/opusclip_api.py --dry-run batch scans/speed/plan.json     # see the exact requests
 python3 -I scripts/opusclip_api.py batch scans/speed/plan.json --yes --wait  # spends credits
-python3 -I scripts/opusclip_api.py clips <projectId> --top 10
-python3 -I scripts/opusclip_api.py download <projectId> --top 5 --out clips/
+python3 -I scripts/opusclip_api.py clips <projectId> --top 10 --plan scans/speed/plan.json   # times in the stream
+python3 -I scripts/opusclip_api.py download <projectId> --top 5 --out clips/ --plan scans/speed/plan.json
 ```
 </details>
 
@@ -87,7 +88,7 @@ python3 -I scripts/opusclip_api.py download <projectId> --top 5 --out clips/
 
 <img src="docs/img/how-it-works.png" alt="Pipeline: find-streams, vodwatch, pick-moments and plan_jobs run locally; jobs route to OpusClip by URL and time range (up to 10 h) or by local cut and upload; ClipAnything with the Gameplay layout returns clips; hooks, copy, the clip-rules gate, scheduling and the scoreboard follow, with a learning loop back to picking" width="100%">
 
-1. **Find.** `find-streams` lists live and recent GTA 6 streams and VODs on YouTube, Twitch and Kick. It is read-only.
+1. **Find.** `find-streams` lists live and recent GTA 6 streams and VODs: YouTube search, plus each watchlisted channel's YouTube streams and Twitch archives (Kick channels come back as links to open). It is read-only.
 2. **Watch the whole VOD, locally.** `vodwatch` downloads only the audio and transcribes it with whisper.cpp. Then it scores every 30-second window on:
    - loudness spikes against the 20 minutes around it,
    - sudden jumps,
@@ -109,7 +110,7 @@ python3 -I scripts/opusclip_api.py download <projectId> --top 5 --out clips/
 
 **Harness, decided.** The plugin bundles OpusClip's hosted MCP server (the same `.mcp.json` entry OpusClip publishes for agents) for interactive work, and ships `scripts/opusclip_api.py`, a stdlib client for the documented REST API, for batches and automation. The official `opusclip@opus-skills` plugin is optional, not a hard dependency: Claude Code refuses or disables a plugin whose dependency comes from a marketplace you haven't added, and this way the install always works.
 
-**Safety built in.** `hooks/hooks.json` makes Claude Code ask before any call that spends credits or publishes. On `mcp.opus.pro`, posting and scheduling happen the moment the tool runs, so the hook matters. Your API key is read from the environment and never printed, and the MCP signs in with OAuth.
+**Safety built in.** `hooks/hooks.json` makes Claude Code ask before this plugin's `opusclip_api.py` or an OpusClip MCP tool spends credits or publishes. For MCP it asks before every OpusClip tool except the documented read-only ones; for the script it checks each call in a command, so a dry run chained in front of a real run doesn't hide it. On `mcp.opus.pro`, posting and scheduling happen the moment the tool runs, so the hook matters. It doesn't cover other tools, such as the CLI in OpusClip's official plugin. Your API key is read from the environment and never printed, and the MCP signs in with OAuth.
 
 Want to see the scanner on a real 23-hour stream? [vodwatch](https://github.com/[OWNER]/vodwatch) is the same scanner as a standalone skill, with an example run.
 
@@ -119,7 +120,7 @@ Want to see the scanner on a real 23-hour stream? [vodwatch](https://github.com/
 |---|---|
 | `clip-desk` | The whole desk in one command: stream in, approved clips out, with three checkpoints (picks + credits, clips, posts). |
 | `setup` | Connects OpusClip (MCP OAuth or API key), checks ffmpeg / yt-dlp / whisper.cpp, creates the `gtavi/` work folder. |
-| `find-streams` | Live and recent GTA 6 streams and VODs (YouTube, Twitch, Kick), with length, views and the next step for each. |
+| `find-streams` | Live and recent GTA 6 streams and VODs: YouTube search, plus each watchlisted channel's YouTube streams and Twitch archives (Kick channels come back as links to open). Length, views and the next step for each. |
 | `vodwatch` | Scans a whole VOD locally (audio, whisper.cpp, loudness, reactions), ranks every 30 s window, makes frame sheets, plans OpusClip jobs. |
 | `pick-moments` | A scoring rubric plus brand-safety and rights checks on frame sheets; writes `picks.md`. |
 | `cut-windows` | Exact windows from VODs over 10 h, Kick links or local files (ytfrag.py, yt-dlp, ffmpeg), with frame rates normalized for upload. |
@@ -192,7 +193,7 @@ All Python is stdlib-only and runs with `python3 -I`. Every script has `--help`.
 
 | Script | What it does |
 |---|---|
-| `opusclip_api.py` | OpusClip REST client: create (URL, uploadId or file via 4-step V2 upload), status/wait, clips, download, transcript, censor, social copy, post, schedule. `--dry-run` prints the exact requests; spending and publishing need `--yes`. |
+| `opusclip_api.py` | OpusClip REST client: create (URL, uploadId or file via 4-step V2 upload), status/wait, clips and download (with `--plan`, in stream time), transcript, censor, social copy, post, schedule. `--dry-run` prints the exact requests; spending and publishing need `--yes`. |
 | `vodwatch.py` | One command for the whole-VOD scan: resolve, audio, scan, rank, frame sheets, OpusClip plan, report. Resumable. |
 | `ytfrag.py` | Exact windows or whole audio tracks from YouTube post-live VODs served as 2-second fragments; rotates throttled URLs, retries and resumes. |
 | `scan_vod.py` | Loudness per second and a chunked whisper.cpp transcript of a full audio track, with coarse 30 s ranking. |
@@ -207,7 +208,7 @@ All Python is stdlib-only and runs with `python3 -I`. Every script has `--help`.
 | `scoreboard.py` | A post ledger and report: medians by platform, streamer and hook style, plus "next" lessons. |
 | `campaign_math.py` | Honest campaign payouts: CPM with minimums, caps and fees; pools; views needed to reach a target. |
 | `countdown.py` | Packages 5 OpusClip clips into a 1080x1920 countdown with number headers, credits and a cold-open title. |
-| `guard.py` | The PreToolUse hook that asks before OpusClip credit spends or posts. |
+| `guard.py` | The PreToolUse hook that asks before `opusclip_api.py` or an OpusClip MCP tool spends credits or publishes. |
 | `doctor.py` | Toolchain check; never prints secrets. |
 | `render.mjs` | HTML to PNG (title cards, countdown headers, this README's art) using your installed Chrome. |
 
@@ -215,9 +216,9 @@ Tests: `python3 -m unittest discover -s tests -v` (the OpusClip HTTP layer is mo
 
 ## FAQ
 
-<details><summary><b>Is this official, or affiliated with Rockstar, IShowSpeed or Kai Cenat?</b></summary>
+<details><summary><b>Who made this? Is it official, or affiliated with Rockstar, IShowSpeed or Kai Cenat?</b></summary>
 
-No. It's an open-source tool built on OpusClip's public API and MCP server. It is not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed or Kai Cenat. The art is original: no Rockstar logos, key art or game wordmarks.
+It isn't OpusClip's official plugin (that's `opusclip@opus-skills`), but it isn't independent of OpusClip either: [OWNER] made it for OpusClip's GTA 6 launch campaign. It's open source and uses OpusClip's public API and MCP server. It is not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed or Kai Cenat. The art is original: no Rockstar logos, key art or game wordmarks.
 </details>
 
 <details><summary><b>What does it cost?</b></summary>
@@ -230,7 +231,7 @@ No. It's an open-source tool built on OpusClip's public API and MCP server. It i
 
 <details><summary><b>Does it post by itself?</b></summary>
 
-No. Every spend and every post needs your yes, and the bundled hook asks again before any OpusClip call that spends credits or publishes. On `mcp.opus.pro`, posting and scheduling take effect immediately, which is why the guard exists.
+No. Every spend and every post needs your yes, and the bundled hook asks again before this plugin's `opusclip_api.py` or an OpusClip MCP tool spends credits or publishes. On `mcp.opus.pro`, posting and scheduling take effect immediately, which is why the guard exists. Other tools, such as the CLI in OpusClip's official plugin, aren't covered by the hook.
 </details>
 
 <details><summary><b>Can it clip a stream while it's live?</b></summary>
@@ -274,6 +275,7 @@ The plugin itself collects nothing.
 
 ## Disclaimer
 
+- **Who made this.** [OWNER] made this plugin for OpusClip as part of OpusClip's GTA 6 launch campaign, so it is not an independent review or recommendation of OpusClip.
 - **Affiliation.** Not affiliated with or endorsed by Rockstar Games, Take-Two Interactive, IShowSpeed, Kai Cenat or any streamer shown. Footage belongs to its creators: credit them, transform it, and take it down when asked.
 - **Earnings.** The examples are illustrative math from published campaign terms (Nov 19, 2026), not typical or expected results. Most clips earn $0.
 - **Product claims.** OpusClip product details follow OpusClip's public docs and pricing pages as of Nov 19, 2026; check them before you rely on them.

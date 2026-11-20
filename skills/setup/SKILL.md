@@ -10,7 +10,7 @@ Goal: every other skill in this plugin runs without surprises. Work through the 
 ## 1. Check the toolchain
 
 ```bash
-python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/doctor.py"
+RENDER_DEPS="${CLAUDE_PLUGIN_DATA}/node" python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/doctor.py"
 ```
 
 For every `XX` line, show the user the `fix:` command and ask before you run an install. On macOS that is usually:
@@ -58,4 +58,4 @@ mkdir -p gtavi/scans gtavi/cuts gtavi/clips gtavi/posts
 - Scanning runs on their machine, so compute is free.
 - OpusClip charges 1 credit per minute of processed video. Every API project costs at least 10 credits. Pro Beta and Max API accounts get 30 requests a minute, 4 projects processing at once and 15 h (900 credits) a month.
 - Free-plan clips carry a watermark, and many campaigns reject watermarked clips.
-- Nothing goes to OpusClip and nothing is posted without the user's explicit yes. This plugin's hook (`hooks/hooks.json`) also asks before any call that spends credits or publishes.
+- Nothing goes to OpusClip and nothing is posted without the user's explicit yes. This plugin's hook (`hooks/hooks.json`) also asks before `opusclip_api.py` or an OpusClip MCP tool spends credits or publishes. It doesn't cover other tools, such as the official plugin's CLI.

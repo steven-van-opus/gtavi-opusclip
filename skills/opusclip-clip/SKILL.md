@@ -25,13 +25,15 @@ Credits are the user's money. Show the exact requests and the credit estimate, a
 
 Requires `/mcp` to be authenticated (see the `setup` skill).
 
-1. `opusclip_submit_project`: pass the VOD URL and the plan's window, using the parameter names the tool's schema shows (URL, range or start/end, model, prompt, clip durations, brand template).
+1. Jobs routed `url` (sources up to 10 h): `opusclip_submit_project` with the VOD URL and the plan's window, using the parameter names the tool's schema shows (URL, range or start/end, model, prompt, clip durations, brand template).
+
+   Jobs routed `upload` (over 10 h, Kick, local files), which includes every GTA 6 launch VOD: run `cut_windows.py --plan` first. Then either use Path B, where `opusclip_api.py batch` does the 4-step V2 upload, or call `opusclip_create_upload_link`, upload the cut exactly as that tool's response says, and pass the returned upload id to `opusclip_submit_project`. The help center lists the MCP submit tool's sources as YouTube or Vimeo, so test a Twitch link before relying on it.
 2. Check progress with `opusclip_list_projects`, then `opusclip_list_clips` and `opusclip_describe_clip`.
 3. `opusclip_preview_clips` to look at them.
 4. `opusclip_export_clip` for the HD file. List and describe return preview URLs only.
 5. Fixes go through `opusclip_edit_clip` (it supports `dryRun`; operations include `set_captions`, `trim_section`, `remove_pauses` and `set_style`, and undo works for 72 h). For bleeps use `opusclip_create_censor_job`.
 
-The hook asks before `opusclip_submit_project`, because it spends credits. Still ask the user yourself first, with the credit estimate.
+The hook asks before `opusclip_submit_project`, because it spends credits, and before every other OpusClip tool that isn't read-only (`opusclip_create_upload_link` included). Still ask the user yourself first, with the credit estimate.
 
 ## Path B: REST script (automation, batches)
 
@@ -39,10 +41,11 @@ Needs `OPUSCLIP_API_KEY` in the environment.
 
 ```bash
 S="${CLAUDE_PLUGIN_ROOT}/scripts"
+python3 -I "$S/cut_windows.py" --plan gtavi/scans/<slug>/plan.json            # first, if any job routes "upload"
 python3 -I "$S/opusclip_api.py" --dry-run batch gtavi/scans/<slug>/plan.json   # exact requests, sends nothing
 python3 -I "$S/opusclip_api.py" batch gtavi/scans/<slug>/plan.json --yes --wait # after the user says yes
-python3 -I "$S/opusclip_api.py" clips <projectId> --top 10                      # title, score*, length, source in/out
-python3 -I "$S/opusclip_api.py" download <projectId> --top 5 --out gtavi/clips/<projectId>
+python3 -I "$S/opusclip_api.py" clips <projectId> --top 10 --plan gtavi/scans/<slug>/plan.json    # title, score*, length, VOD in/out
+python3 -I "$S/opusclip_api.py" download <projectId> --top 5 --out gtavi/clips/<projectId> --plan gtavi/scans/<slug>/plan.json
 python3 -I "$S/opusclip_api.py" censor <projectId> <clipId> --yes              # bleep profanity
 ```
 
@@ -65,7 +68,7 @@ Behaviour of `batch`:
    - If the automatic layout cut off the facecam, a kill feed or the minimap, fix the framing in the OpusClip editor. Facecams in these streams are often a small box at the edge of the 16:9 frame.
 2. Are the captions correct? Do names spell right? Add a brand vocabulary in OpusClip (Pro and up) if they keep failing.
 3. Is the score high and does the clip deliver? The `score` field is what OpusClip's own CLI reads; the app calls it the Virality Score (0 to 99). It is a prediction, not a promise.
-4. Write the credit line into `clips.json` (for example `"credit": "IShowSpeed (YouTube)"`). Then hand off to `hooks-titles`, `captions-copy` and `clip-rules`.
+4. Write the credit line into `clips.json` (for example `"credit": "IShowSpeed (YouTube)"`). VOD time = job start in plan.json + clip time; log that in `gtavi/provenance.csv`. OpusClip's clip times for an `upload` job are inside the uploaded cut, not the stream; `download --plan` writes `vodStart`/`vodEnd` into `clips.json` for you. Then hand off to `hooks-titles`, `captions-copy` and `clip-rules`.
 
 ## Never
 
