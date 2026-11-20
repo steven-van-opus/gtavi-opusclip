@@ -1,0 +1,50 @@
+{
+ "_type": "playlist",
+ "id": "gta 6 live stream",
+ "entries": [
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "id": "LIVE0000001",
+   "url": "https://www.youtube.com/watch?v=LIVE0000001",
+   "title": "GTA 6 day 2 LIVE (example)",
+   "channel": "Example Streamer",
+   "duration": null,
+   "view_count": 250000,
+   "live_status": "is_live"
+  },
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "id": "LONG0000001",
+   "url": "https://www.youtube.com/watch?v=LONG0000001",
+   "title": "GTA 6 launch marathon (example)",
+   "channel": "Example Streamer",
+   "duration": 85542,
+   "view_count": 1200000,
+   "live_status": "was_live"
+  },
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "id": "SHRT0000001",
+   "url": "https://www.youtube.com/watch?v=SHRT0000001",
+   "title": "GTA 6 first mission stream (example)",
+   "channel": "Another Streamer",
+   "duration": 14400,
+   "view_count": 90000,
+   "live_status": "was_live"
+  },
+  {
+   "_type": "url",
+   "ie_key": "Youtube",
+   "id": "CLIP0000001",
+   "url": "https://www.youtube.com/watch?v=CLIP0000001",
+   "title": "funny gta 6 moment (example)",
+   "channel": "Clip Page",
+   "duration": 41,
+   "view_count": 5000,
+   "live_status": "not_live"
+  }
+ ]
+}
